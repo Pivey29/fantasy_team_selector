@@ -21,7 +21,7 @@ def get_prices(df: pd.DataFrame):
     
     df['price'] = bell_values.round().astype(int)
     df['price'] = df.groupby('total')['price'].transform('max')
-    df['price'] = df['price'].clip(lower=1)
+    df['price'] = df['price'].clip(lower=3)
 
     print(f"Total Talent Cost: {df['price'].sum()}")
     print(f"Average Player Cost: {df['price'].mean():.2f}")
