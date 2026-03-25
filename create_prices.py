@@ -11,7 +11,7 @@ df.head()
 open = df[df["division"] == "Opens"]
 women = df[df["division"] == "Womens"]
 
-def get_prices(df: pd.DataFrame):
+def get_prices_OLD(df: pd.DataFrame):
     # sort on sum of ratings
     df = df.sort_values(by='total', ascending=False).reset_index(drop=True)
     num_players = len(df)
@@ -28,6 +28,23 @@ def get_prices(df: pd.DataFrame):
     print(f"Cost of a 'Dream Team' (Top 9): {df['price'].head(9).sum()}")
     
     return df
+
+
+def get_prices(df: pd.DataFrame):
+    df = df.sort_values(by='total', ascending=False).reset_index(drop=True)
+    num_players = len(df)
+    
+    # Create a smooth line from 25 down to 3
+    # This ensures a gradual drop-off regardless of random luck
+    prices = np.linspace(25, 3, num_players)
+    
+    df['price'] = prices.round().astype(int)
+    
+    # Still group by total to ensure equal talent = equal price
+    df['price'] = df.groupby('total')['price'].transform('max')
+    
+    return df
+
 
 df = get_prices(df)
 
