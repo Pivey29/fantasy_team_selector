@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
 
-np.random.seed(42)
+np.random.seed(43)
 
 df = pd.read_csv("data/ratings.csv")
 print(len(df))
