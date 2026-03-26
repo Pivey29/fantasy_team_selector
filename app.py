@@ -92,7 +92,7 @@ with st.expander("📖 **How to Play & Draft Rules**", expanded=True):
     Welcome to the Regional Fantasy Draft! Build your squad of **9 players** with these rules:
     * 💰 **Budget:** **100 units** max.
     * ⚖️ **Gender Balance:** Min **4 players per division** (Opens and Womens).
-    * 🤝 **Club Limit:** Max **2 players per team**.
+    * 🤝 **Team Limit:** Max **2 players per team**.
     * 🌟 **Captains:** Designate **one Captain per division** for **double points**!
     
     **Scoring:** 1pt per Assist/Goal, 3pts per Callahan. 
