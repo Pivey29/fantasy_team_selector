@@ -96,7 +96,6 @@ with st.expander("📖 **How to Play & Draft Rules**", expanded=True):
     * 🌟 **Captains:** Designate **one Captain per division** for **double points**!
     
     **Scoring:** 1pt per Assist/Goal, 3pts per Callahan. 
-    *Enter your name below to begin. Your progress is saved as you browse tabs.*
     """)
 
 if st.session_state.submitted:
@@ -113,7 +112,7 @@ if st.session_state.submitted:
 manager_name = st.text_input("Manager Name:", key="mgr_name_persistent", placeholder="Type name and press Enter...").strip()
 
 if not manager_name and not st.session_state.roster:
-    st.info("👋 Welcome! Enter your name above to begin drafting.")
+    st.info("👋 Welcome! Enter your name above to begin drafting. Your progress is saved as you browse tabs.")
     st.stop()
 
 # --- 7. TOP COUNTERS ---
