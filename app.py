@@ -109,7 +109,7 @@ if st.session_state.submitted:
     st.stop()
 
 # Persistent Name Input
-manager_name = st.text_input("Manager Name:", key="mgr_name_persistent", placeholder="Type name and press Enter...").strip()
+manager_name = st.text_input("Manager Name:", key="mgr_name_persistent", placeholder="Type name a&nd surname and press Enter...").strip()
 
 if not manager_name and not st.session_state.roster:
     st.info("👋 Welcome! Enter your name above to begin drafting. Your progress is saved as you browse tabs.")
