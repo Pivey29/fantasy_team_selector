@@ -11,16 +11,16 @@ df.head()
 open = df[df["division"] == "Opens"]
 women = df[df["division"] == "Womens"]
 
-def get_prices_OLD(df: pd.DataFrame):
+def get_prices(df: pd.DataFrame):
     # sort on sum of ratings
     df = df.sort_values(by='total', ascending=False).reset_index(drop=True)
     num_players = len(df)
 
-    bell_values = np.random.normal(loc=12, scale=6, size=num_players)
+    bell_values = np.random.normal(loc=12, scale=7, size=num_players)
     bell_values = np.sort(bell_values)[::-1]
     
     df['price'] = bell_values.round().astype(int)
-    df['price'] = df.groupby('total')['price'].transform('max')
+    # df['price'] = df.groupby('total')['price'].transform('max')
     df['price'] = df['price'].clip(lower=3)
 
     print(f"Total Talent Cost: {df['price'].sum()}")
@@ -30,7 +30,7 @@ def get_prices_OLD(df: pd.DataFrame):
     return df
 
 
-def get_prices(df: pd.DataFrame):
+def get_prices_(df: pd.DataFrame):
     df = df.sort_values(by='total', ascending=False).reset_index(drop=True)
     num_players = len(df)
     
