@@ -31,7 +31,7 @@ def load_player_data():
         st.error(f"Error loading player data: {e}")
         return pd.DataFrame()
 
-# @st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600)
 def fetch_raw_sheets(_conn):
     drafts = _conn.read(worksheet=RESULTS_TEAMS_TAB, ttl=0)
     scores = _conn.read(worksheet=RESULTS_SCORES_TAB, ttl=0)
@@ -114,7 +114,7 @@ if not DRAFT_OPEN:
         with st.expander("📊 View Full Rankings", expanded=False):
             # THE REFRESH BUTTON
             if st.button("🔄 Sync Fresh Data from Google Sheets"):
-                st.cache_data.clear()
+                st.session_state.cache_key += 1
                 st.rerun()
 
             # Display rank in the table for clarity
