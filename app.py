@@ -2,10 +2,14 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime, timedelta
-
-# --- 1. SETTINGS: THE MASTER TOGGLE ---
-DRAFT_OPEN = False
-TOURNAMENT_NAME = "2026 Fantasy Regionals"
+# --- 1. Settings --- 
+from config import (
+    TOURNAMENT_NAME,
+    RESULTS_TEAMS_TAB,
+    RESULTS_SCORES_TAB,
+    RANKING_DATA,
+    DRAFT_OPEN
+)
 
 # --- 2. PAGE CONFIG ---
 st.set_page_config(page_title=TOURNAMENT_NAME, page_icon="🏆", layout="wide")
@@ -16,7 +20,7 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 @st.cache_data(ttl=3600)
 def load_player_data():
     try:
-        df = pd.read_csv("data/test.csv")
+        df = pd.read_csv(RANKING_DATA)
         df.columns = df.columns.str.strip().str.lower()
         if 'division' in df.columns:
             df['division'] = df['division'].astype(str).str.strip().str.lower()
@@ -29,8 +33,8 @@ def load_player_data():
 
 @st.cache_data(ttl=3600)
 def fetch_raw_sheets(_conn):
-    drafts = _conn.read(worksheet="Sheet1", ttl=0)
-    scores = _conn.read(worksheet="Scores", ttl=0)
+    drafts = _conn.read(worksheet=RESULTS_TEAMS_TAB, ttl=0)
+    scores = _conn.read(worksheet=RESULTS_SCORES_TAB, ttl=0)
     return drafts, scores
 
 df_players = load_player_data()
@@ -70,42 +74,51 @@ def get_processed_results(conn):
     except: return pd.DataFrame(), pd.DataFrame()
 
 # --- 5. TOP UI: LEADERBOARD ---
-# --- 5. TOP UI: LEADERBOARD ---
 if not DRAFT_OPEN:
     st.title("🏆 Live Tournament Results")
     board, full_data = get_processed_results(conn)
     
     if not board.empty:
-        # Get the unique scores in descending order
-        unique_scores = sorted(board['Score'].unique(), reverse=True)
+        # Calculate Competition Rank (1, 2, 2, 4...)
+        # This ensures if two are tied for 1st, the next is 3rd.
+        board['Rank'] = board['Score'].rank(method='min', ascending=False).astype(int)
+        
+        # We only want to display the top 3 "slots"
+        top_3_teams = board[board['Rank'] <= 3].copy()
         
         c1, c2, c3 = st.columns(3)
+        cols = [c1, c2, c3]
         
-        # 🥇 1st Place (All teams with the highest score)
-        with c1:
-            top_score = unique_scores[0]
-            top_teams = board[board['Score'] == top_score]['Team'].tolist()
-            label = "🥇 1st Place (Tie)" if len(top_teams) > 1 else "🥇 1st Place"
-            st.metric(label, ", ".join(top_teams), f"{int(top_score)} pts")
+        # We loop through the first 3 physical slots on your screen
+        for i in range(3):
+            with cols[i]:
+                if i < len(top_3_teams):
+                    row = top_3_teams.iloc[i]
+                    rank = row['Rank']
+                    score = int(row['Score'])
+                    team_name = row['Team']
+                    
+                    # Determine the Medal/Label
+                    if rank == 1:
+                        label = "🥇 1st Place"
+                    elif rank == 2:
+                        label = "🥈 2nd Place"
+                    else:
+                        label = "🥉 3rd Place"
+                    
+                    st.metric(label, team_name, f"{score} pts")
+                else:
+                    # Empty slot if fewer than 3 teams exist
+                    st.write("")
 
-        # 🥈 2nd Place (All teams with the second highest score)
-        with c2:
-            if len(unique_scores) > 1:
-                second_score = unique_scores[1]
-                second_teams = board[board['Score'] == second_score]['Team'].tolist()
-                label = "🥈 2nd Place (Tie)" if len(second_teams) > 1 else "🥈 2nd Place"
-                st.metric(label, ", ".join(second_teams), f"{int(second_score)} pts")
-
-        # 🥉 3rd Place (All teams with the third highest score)
-        with c3:
-            if len(unique_scores) > 2:
-                third_score = unique_scores[2]
-                third_teams = board[board['Score'] == third_score]['Team'].tolist()
-                label = "🥉 3rd Place (Tie)" if len(third_teams) > 1 else "🥉 3rd Place"
-                st.metric(label, ", ".join(third_teams), f"{int(third_score)} pts")
-            
         with st.expander("📊 View Full Rankings", expanded=False):
-            st.dataframe(board, use_container_width=True, hide_index=True)
+            # Display rank in the table for clarity
+            st.dataframe(
+                board[['Rank', 'Team', 'Score']], 
+                use_container_width=True, 
+                hide_index=True,
+                column_config={"Rank": st.column_config.NumberColumn("Rank", format="%d")}
+            )
     st.divider()
 
 # --- 6. SESSION STATE ---
@@ -241,11 +254,11 @@ if len(st.session_state.roster) == 9:
         st.success(f"✅ Ready, {manager_name}!")
         if st.button("🚀 SUBMIT FINAL TEAM", use_container_width=True):
             try:
-                data = conn.read(worksheet="Sheet1", ttl=0)
+                data = conn.read(worksheet=RESULTS_TEAMS_TAB, ttl=0)
                 sorted_names = list(open_roster['name']) + list(women_roster['name'])
                 new_row = {"Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "Manager_Name": manager_name, "Total_Cost": total_spent, "Open_Captain": st.session_state.captain_open, "Women_Captain": st.session_state.captain_women}
                 for i in range(9): new_row[f"Player_{i+1}"] = sorted_names[i] if i < len(sorted_names) else ""
-                conn.update(worksheet="Sheet1", data=pd.concat([data, pd.DataFrame([new_row])], ignore_index=True))
+                conn.update(worksheet=RESULTS_TEAMS_TAB, data=pd.concat([data, pd.DataFrame([new_row])], ignore_index=True))
                 st.session_state.submitted = True; st.rerun()
             except Exception as e: st.error(f"Error: {e}")
 else: st.info(f"Progress: {len(st.session_state.roster)} / 9")
