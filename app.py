@@ -70,14 +70,40 @@ def get_processed_results(conn):
     except: return pd.DataFrame(), pd.DataFrame()
 
 # --- 5. TOP UI: LEADERBOARD ---
+# --- 5. TOP UI: LEADERBOARD ---
 if not DRAFT_OPEN:
     st.title("🏆 Live Tournament Results")
     board, full_data = get_processed_results(conn)
+    
     if not board.empty:
+        # Get the unique scores in descending order
+        unique_scores = sorted(board['Score'].unique(), reverse=True)
+        
         c1, c2, c3 = st.columns(3)
-        c1.metric("🥇 1st Place", board.iloc[0]['Team'], f"{int(board.iloc[0]['Score'])} pts")
-        if len(board) > 1: c2.metric("🥈 2nd", board.iloc[1]['Team'], f"{int(board.iloc[1]['Score'])} pts")
-        if len(board) > 2: c3.metric("🥈 3rd", board.iloc[2]['Team'], f"{int(board.iloc[2]['Score'])} pts")
+        
+        # 🥇 1st Place (All teams with the highest score)
+        with c1:
+            top_score = unique_scores[0]
+            top_teams = board[board['Score'] == top_score]['Team'].tolist()
+            label = "🥇 1st Place (Tie)" if len(top_teams) > 1 else "🥇 1st Place"
+            st.metric(label, ", ".join(top_teams), f"{int(top_score)} pts")
+
+        # 🥈 2nd Place (All teams with the second highest score)
+        with c2:
+            if len(unique_scores) > 1:
+                second_score = unique_scores[1]
+                second_teams = board[board['Score'] == second_score]['Team'].tolist()
+                label = "🥈 2nd Place (Tie)" if len(second_teams) > 1 else "🥈 2nd Place"
+                st.metric(label, ", ".join(second_teams), f"{int(second_score)} pts")
+
+        # 🥉 3rd Place (All teams with the third highest score)
+        with c3:
+            if len(unique_scores) > 2:
+                third_score = unique_scores[2]
+                third_teams = board[board['Score'] == third_score]['Team'].tolist()
+                label = "🥉 3rd Place (Tie)" if len(third_teams) > 1 else "🥉 3rd Place"
+                st.metric(label, ", ".join(third_teams), f"{int(third_score)} pts")
+            
         with st.expander("📊 View Full Rankings", expanded=False):
             st.dataframe(board, use_container_width=True, hide_index=True)
     st.divider()
