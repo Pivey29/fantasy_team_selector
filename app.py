@@ -31,7 +31,7 @@ def load_player_data():
         st.error(f"Error loading player data: {e}")
         return pd.DataFrame()
 
-@st.cache_data(ttl=3600)
+# @st.cache_data(ttl=3600)
 def fetch_raw_sheets(_conn):
     drafts = _conn.read(worksheet=RESULTS_TEAMS_TAB, ttl=0)
     scores = _conn.read(worksheet=RESULTS_SCORES_TAB, ttl=0)
