@@ -112,6 +112,11 @@ if not DRAFT_OPEN:
                     st.write("")
 
         with st.expander("📊 View Full Rankings", expanded=False):
+            # THE REFRESH BUTTON
+            if st.button("🔄 Sync Fresh Data from Google Sheets"):
+                st.cache_data.clear()
+                st.rerun()
+
             # Display rank in the table for clarity
             st.dataframe(
                 board[['Rank', 'Team', 'Score']], 
