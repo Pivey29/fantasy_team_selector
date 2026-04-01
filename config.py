@@ -1,6 +1,6 @@
 # basic settings
 
-DRAFT_OPEN = True
+DRAFT_OPEN = False
 TOURNAMENT_NAME = "Nationals 2026 - Fantasy Draft"
 DIV_OPEN_LABEL = "opens"
 DIV_WOMEN_LABEL = "womens"

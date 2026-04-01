@@ -52,3 +52,23 @@ CREATE TABLE transfer_logs (
     player_in_id UUID REFERENCES players(id),
     changed_at TIMESTAMPTZ
 );
+
+-- scores
+-- 1. Create the Table with constraints built-in
+CREATE TABLE IF NOT EXISTS player_scores (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    
+    -- Adding UNIQUE right here is the fastest way to set it up
+    player_id UUID UNIQUE NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    
+    player_name TEXT,
+    total_score NUMERIC DEFAULT 0,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+-- 2. Performance Index (Still recommended for fast lookups)
+CREATE INDEX IF NOT EXISTS idx_player_scores_player_id ON player_scores(player_id);
+
+-- 3. Security (Ensures your app can read the data)
+ALTER TABLE player_scores ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read access" ON player_scores FOR SELECT USING (true);
