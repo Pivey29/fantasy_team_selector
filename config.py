@@ -1,7 +1,9 @@
 # basic settings
 
-DRAFT_OPEN = True
-TOURNAMENT_NAME = "2026 Fantasy Regionals"
+DRAFT_OPEN = False
+TOURNAMENT_NAME = "Nationals 2026 - Fantasy Draft"
+DIV_OPEN_LABEL = "opens"
+DIV_WOMEN_LABEL = "womens"
 # RANKING_DATA = "data/test.csv"
 RESULTS_TEAMS_TAB = "Sheet1"
 RESULTS_SCORES_TAB = "Scores v2"
@@ -12,3 +14,5 @@ MIN_GENDER_SIZE = 4
 MAX_TEAM_SIZE = 2
 CAPTAIN_MULTIPLIER = 2
 PIN_LENGTH = 4
+MAX_PLAYER_TRANSFERS = 2
+MAX_CAPTAIN_CHANGES = 2
