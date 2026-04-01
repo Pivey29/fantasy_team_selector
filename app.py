@@ -1,26 +1,35 @@
 import streamlit as st
-from streamlit_gsheets import GSheetsConnection
+# from streamlit_gsheets import GSheetsConnection
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime
+from st_supabase_connection import SupabaseConnection
 # --- 1. Settings --- 
 from config import (
     TOURNAMENT_NAME,
     RESULTS_TEAMS_TAB,
     RESULTS_SCORES_TAB,
-    RANKING_DATA,
-    DRAFT_OPEN
+    DRAFT_OPEN,
+    ROSTER_SIZE,
+    BUDGET_LIMIT,
+    MAX_GENDER_SIZE,
+    MAX_TEAM_SIZE,
+    CAPTAIN_MULTIPLIER,
+    MIN_GENDER_SIZE,
+    PIN_LENGTH
 )
 
 # --- 2. PAGE CONFIG ---
 st.set_page_config(page_title=TOURNAMENT_NAME, page_icon="🏆", layout="wide")
 
 # --- 3. CONNECTION & DATA LOADING ---
-conn = st.connection("gsheets", type=GSheetsConnection)
+# conn = st.connection("gsheets", type=GSheetsConnection)
+conn = st.connection("supabase", type=SupabaseConnection)
 
 @st.cache_data(ttl=3600)
 def load_player_data():
     try:
-        df = pd.read_csv(RANKING_DATA)
+        response = conn.table("players").select("*").execute()
+        df = pd.DataFrame(response.data)
         df.columns = df.columns.str.strip().str.lower()
         if 'division' in df.columns:
             df['division'] = df['division'].astype(str).str.strip().str.lower()
@@ -66,7 +75,7 @@ def get_processed_results(conn):
         merged = melted.merge(scores_df[['Names', 'Total']], left_on="player_name", right_on="Names", how="left")
         merged['Total'] = pd.to_numeric(merged['Total'], errors='coerce').fillna(0)
         merged['is_cap'] = (merged['player_name'] == merged['Open_Captain']) | (merged['player_name'] == merged['Women_Captain'])
-        merged['calc_pts'] = merged.apply(lambda x: x['Total'] * 2 if x['is_cap'] else x['Total'], axis=1)
+        merged['calc_pts'] = merged.apply(lambda x: x['Total'] * CAPTAIN_MULTIPLIER if x['is_cap'] else x['Total'], axis=1)
 
         leaderboard = merged.groupby("Unique_Team_Name")["calc_pts"].sum().reset_index()
         leaderboard.columns = ["Team", "Score"]
@@ -135,7 +144,7 @@ if 'captain_women' not in st.session_state: st.session_state.captain_women = Non
 # --- 7. CALCULATIONS ---
 current_roster_df = df_players[df_players['name'].isin(st.session_state.roster)]
 total_spent = current_roster_df['price'].sum()
-remaining_budget = 100 - total_spent
+remaining_budget = BUDGET_LIMIT - total_spent
 open_roster = current_roster_df[current_roster_df['division'] == 'opens']
 women_roster = current_roster_df[current_roster_df['division'] == 'womens']
 count_open, count_women = len(open_roster), len(women_roster)
@@ -147,15 +156,15 @@ if DRAFT_OPEN:
         st.header("📋 Draft Summary")
         st.metric("Budget Remaining", f"{remaining_budget}")
         st.divider()
-        st.subheader("Team Usage (Max 2)")
+        st.subheader(f"Team Usage (Max {MAX_TEAM_SIZE})")
         if team_counts:
             for team, count in team_counts.items():
-                st.markdown(f":{'orange' if count >= 2 else 'gray'}[**{team}**: {count} / 2]")
+                st.markdown(f":{'orange' if count >= MAX_TEAM_SIZE else 'gray'}[**{team}**: {count} / {MAX_TEAM_SIZE}]")
         st.divider()
-        st.subheader(f"Opens ({count_open}/4+)")
+        st.subheader(f"Opens ({count_open}/{MIN_GENDER_SIZE}+)")
         for _, p in open_roster.iterrows():
             st.write(f"{'⭐ ' if p['name'] == st.session_state.captain_open else '• '}{p['name']} ({p['team']})")
-        st.subheader(f"Womens ({count_women}/4+)")
+        st.subheader(f"Womens ({count_women}/{MIN_GENDER_SIZE}+)")
         for _, p in women_roster.iterrows():
             st.write(f"{'⭐ ' if p['name'] == st.session_state.captain_women else '• '}{p['name']} ({p['team']})")
         st.divider()
@@ -164,52 +173,119 @@ if DRAFT_OPEN:
 
 # --- 9. MAIN INTERFACE ---
 if DRAFT_OPEN:
-    st.title("🏆 2026 Fantasy Regionals Draft")
+    st.title(f"🏆 {TOURNAMENT_NAME}")
     with st.expander("📖 **Draft Rules**", expanded=True):
-        st.markdown("""
-    Welcome to the Regional Fantasy Draft! Build your squad of **9 players** with these rules:
-    * 💰 **Budget:** **100 units** max.
-    * ⚖️ **Gender Balance:** Min **4 players per division** (Opens and Womens).
-    * 🤝 **Team Limit:** Max **2 players per team**.
+        st.markdown(f"""
+    Welcome to the Regional Fantasy Draft! Build your squad of **{ROSTER_SIZE} players** with these rules:
+    * **Squad Size:** You must select {ROSTER_SIZE} players.
+    * 💰 **Budget:** **{BUDGET_LIMIT} units** max.
+    * ⚖️ **Gender Balance:** Min **{MIN_GENDER_SIZE} per division** (Opens and Womens).
+    * 🤝 **Team Limit:** Max **{MAX_TEAM_SIZE} per club**.
     * 🌟 **Captains:** Designate **one Captain per division** for **double points**!
-
-    **Scoring:** 1pt per Assist/Goal, 3pts per Callahan.
     """)
-else:
-    st.title("🛡️ Manager Portal")
 
-if st.session_state.submitted and DRAFT_OPEN:
-    st.success("🎉 Team submitted!")
-    if st.button("Start New Draft"):
-        st.session_state.submitted = False; st.session_state.roster = []; st.rerun()
-    st.stop()
+    # --- THE DYNAMIC GATE ---
+    col_a, col_b = st.columns(2)
+    with col_a:
+        manager_name = st.text_input("Manager Name:", key="mgr_name_persistent", placeholder="Type your name...").strip()   
 
-manager_name = st.text_input("Manager Name:", key="mgr_name_persistent", placeholder="Type your name...").strip()
+    # Determine PIN Label dynamically based on whether the name exists
+    pin_label = f"{PIN_LENGTH}-digit PIN:" 
+    is_new_user = True
 
-if not manager_name and not st.session_state.roster and DRAFT_OPEN:
-    st.info("👋 Enter your name to begin drafting.")
-    st.stop()
-
-# Live Results View (Team Lookup)
-if not DRAFT_OPEN:
     if manager_name:
-        st.subheader(f"📋 Rosters for {manager_name}")
-        board, full_data = get_processed_results(conn)
-        my_teams = full_data[full_data['Manager_Name'].str.lower() == manager_name.lower()]
-        if not my_teams.empty:
-            for team_label in my_teams['Unique_Team_Name'].unique():
-                with st.expander(f"🔍 Details for {team_label}"):
-                    this_t = my_teams[my_teams['Unique_Team_Name'] == team_label]
-                    st.dataframe(this_t[['player_name', 'is_cap', 'Total', 'calc_pts']].rename(columns={'player_name': 'Player', 'is_cap': 'Captain?', 'Total': 'Base Pts', 'calc_pts': 'Your Pts'}), hide_index=True)
-                    st.metric("Score", f"{int(this_t['calc_pts'].sum())} pts")
-        else: st.warning("No submission found.")
+        name_check = conn.table("managers").select("id").eq("manager_name", manager_name).execute()
+        if name_check.data:
+            pin_label = f"🔓 Enter your {PIN_LENGTH}-digit PIN:"
+            is_new_user = False
+        else:
+            pin_label = f"✨ Create a {PIN_LENGTH}-digit PIN:"
+            is_new_user = True
+
+    with col_b:
+        # Use the dynamic pin_label here
+        manager_pin = st.text_input(pin_label, type="password", max_chars=PIN_LENGTH)
+
+    # SUCCESS STATE HANDLING (Moves it above the .stop() gates)
+    if st.session_state.submitted:
+        st.success("🎉 Team submitted successfully! You can edit it anytime before the tournament starts.")
+        if st.button("Start New Draft / Edit Existing Draft"):
+            # This wipes the session but the name/pin inputs stay, 
+            # so the "Pre-load" logic will instantly catch them and reload.
+            st.session_state.submitted = False
+            st.session_state.roster = []
+            st.rerun()
+        st.stop()
+
+    # STOP GATE: Block progress if credentials are incomplete
+    if not manager_name or len(manager_pin) < PIN_LENGTH:
+        st.info(f"👋 Enter your Manager Name and a {PIN_LENGTH}-digit PIN to begin.")
+        st.stop()
+
+    # --- AUTH & PRE-LOAD LOGIC ---
+    # Try to find a match for Name + PIN
+    exist_check = conn.table("managers").select("id").eq("manager_name", manager_name).eq("pin", manager_pin).execute()
+    
+    if exist_check.data:
+        # CORRECT CREDENTIALS -> Load existing team
+        manager_id = exist_check.data[0]['id']
+        if not st.session_state.roster:
+            with st.spinner("🔄 Loading your current roster..."):
+                current_roster = conn.table("rosters").select("is_captain, players(name, division)").eq("manager_id", manager_id).execute()
+                if current_roster.data:
+                    st.session_state.roster = []
+                    for item in current_roster.data:
+                        p_name = item['players']['name']
+                        p_div = item['players']['division']
+                        st.session_state.roster.append(p_name)
+                        if item['is_captain']:
+                            if p_div == 'opens': st.session_state.captain_open = p_name
+                            else: st.session_state.captain_women = p_name
+                    st.rerun()
+    else:
+        # FAILED LOGIN: Check if the name is taken or if this is just a brand new user
+        name_exists_query = conn.table("managers").select("id").eq("manager_name", manager_name).execute()
+        if name_exists_query.data:
+            # Name is in DB, but PIN was wrong
+            st.error("❌ Incorrect PIN for this Manager Name. Please try again.")
+            st.stop()
+        else:
+            # Name is NOT in DB. This is a new user. 
+            # We let them through to the drafting tabs!
+            st.caption(f"✨ New Manager: **{manager_name}**. Your team will be saved when you hit submit.")
+
+else:
+    # --- 🛡️ MANAGER PORTAL (Draft Closed) ---
+    st.title("🛡️ Manager Portal")
+    manager_name = st.text_input("Manager Name:", key="mgr_name_persistent").strip()
+    manager_pin = st.text_input(f"{PIN_LENGTH}-digit PIN:", type="password", max_chars=PIN_LENGTH)
+
+    if manager_name and len(manager_pin) == PIN_LENGTH:
+        auth_res = conn.table("managers").select("id").eq("manager_name", manager_name).eq("pin", manager_pin).execute()
+        if auth_res.data:
+            st.subheader(f"📋 Roster for {manager_name}")
+            # Results logic goes here
+        else:
+            st.error("❌ Invalid Name or PIN.")
     st.stop()
 
 # --- 10. DRAFTING TABS ---
+if st.session_state.roster:
+    st.caption(f"✍️ Editing team for **{manager_name}**")
 c1, c2, c3 = st.columns(3)
-c1.metric("Spent", f"{total_spent}/100")
-c2.metric("Opens", f"{count_open}/4+", delta="✅" if count_open >= 4 else count_open-4)
-c3.metric("Womens", f"{count_women}/4+", delta="✅" if count_women >= 4 else count_women-4)
+c1.metric("Spent", f"{total_spent}/{BUDGET_LIMIT}")
+
+max_opens = min(MAX_GENDER_SIZE, ROSTER_SIZE - count_women)
+max_womens = min(MAX_GENDER_SIZE, ROSTER_SIZE - count_open)
+
+# Updated metrics to show the n-player cap
+c2.metric("Opens", f"{count_open}/{MIN_GENDER_SIZE}", 
+          delta=f"{max_opens-count_open} left" if count_open < MAX_GENDER_SIZE else "MAX",
+          delta_color="normal" if count_open < MAX_GENDER_SIZE else "inverse")
+
+c3.metric("Womens", f"{count_women}/{MIN_GENDER_SIZE}", 
+          delta=f"{max_womens-count_women} left" if count_women < MAX_GENDER_SIZE else "MAX",
+          delta_color="normal" if count_women < MAX_GENDER_SIZE else "inverse")
 
 tab_open, tab_women = st.tabs(["Open Division", "Women's Division"])
 divisions = {"Open": "opens", "Women": "womens"}
@@ -217,53 +293,124 @@ divisions = {"Open": "opens", "Women": "womens"}
 for label, div_filter in divisions.items():
     with (tab_open if label == "Open" else tab_women):
         disp_df = df_players[df_players['division'] == div_filter]
+        
+        # Header Row
         st.columns([3, 1, 1.5, 1.5])[0].write("**Player (Team)**")
+        
+        # Gender-specific count check
+        current_gender_count = count_open if div_filter == 'opens' else count_women
+        gender_full = current_gender_count >= MAX_GENDER_SIZE
+
         for _, row in disp_df.iterrows():
             p_n, p_p, p_t = row['name'], row['price'], row['team']
             is_in = p_n in st.session_state.roster
             is_cap = (p_n == st.session_state.captain_open or p_n == st.session_state.captain_women)
-            team_full = team_counts.get(p_t, 0) >= 2 and not is_in
+            team_full = team_counts.get(p_t, 0) >= MAX_TEAM_SIZE and not is_in
+            
             with st.container():
                 ca, cb, cc, cd = st.columns([3, 1, 1.5, 1.5])
                 ca.write(f"**{p_n}** ({p_t})")
                 cb.write(f"{p_p}")
+                
                 if is_in:
+                    # REMOVE Logic
                     if cc.button("Remove", key=f"r_{p_n}_{label}", type="primary"):
                         st.session_state.roster.remove(p_n)
+                        # Clean up captains if removed
                         if st.session_state.captain_open == p_n: st.session_state.captain_open = None
                         if st.session_state.captain_women == p_n: st.session_state.captain_women = None
                         st.rerun()
-                    if is_cap: cd.markdown("🌟 **Captain**")
+                    
+                    # CAPTAIN Logic
+                    if is_cap: 
+                        cd.markdown("🌟 **Captain**")
                     elif cd.button("Make Cap", key=f"p_{p_n}_{label}"):
                         if div_filter == 'opens': st.session_state.captain_open = p_n
                         else: st.session_state.captain_women = p_n
                         st.rerun()
                 else:
-                    can = (len(st.session_state.roster) < 9) and (total_spent+p_p <= 100) and not team_full
-                    if cc.button("Add Player" if not team_full else f"Full", key=f"a_{p_n}_{label}", disabled=not can):
-                        st.session_state.roster.append(p_n); st.rerun()
-                    if cd.button("Add as Cap", key=f"ac_{p_n}_{label}", disabled=not can):
+                    # ADD Logic with Gender Cap (Max n)
+                    can_add = (
+                        len(st.session_state.roster) < ROSTER_SIZE and 
+                        (total_spent + p_p <= BUDGET_LIMIT) and 
+                        not team_full and 
+                        not gender_full
+                    )
+                    
+                    # Button Labels for better UX
+                    add_label = "Add Player"
+                    if team_full: add_label = "Club Max"
+                    elif gender_full: add_label = "Gender Max"
+                    elif total_spent + p_p > BUDGET_LIMIT: add_label = "Too Expensive"
+                    
+                    if cc.button(add_label, key=f"a_{p_n}_{label}", disabled=not can_add):
+                        st.session_state.roster.append(p_n)
+                        st.rerun()
+                        
+                    if cd.button("Add + Cap", key=f"ac_{p_n}_{label}", disabled=not can_add):
                         st.session_state.roster.append(p_n)
                         if div_filter == 'opens': st.session_state.captain_open = p_n
                         else: st.session_state.captain_women = p_n
                         st.rerun()
 
-# --- 11. SUBMISSION ---
+# --- 11. SUBMISSION & VALIDATION ---
 st.divider()
-if len(st.session_state.roster) == 9:
-    if not manager_name: st.error("⚠️ Enter Manager Name.")
-    elif not (count_open >= 4 and count_women >= 4): st.warning("⚠️ Gender balance required.")
-    elif not (st.session_state.captain_open and st.session_state.captain_women): st.warning("⚠️ Pick Captains.")
-    elif total_spent > 100: st.error("⚠️ Over Budget!")
+
+# 1. Check current status
+roster_count = len(st.session_state.roster)
+is_complete = roster_count == ROSTER_SIZE
+has_captains = st.session_state.captain_open and st.session_state.captain_women
+
+if is_complete:
+    # 2. Final Logic Checks
+    if not manager_name or len(manager_pin) < PIN_LENGTH:
+        st.error(f"⚠️ Please enter your Manager Name and a {PIN_LENGTH}-digit PIN.")
+    elif not (count_open >= MIN_GENDER_SIZE and count_women >= MIN_GENDER_SIZE):
+        st.warning(f"⚠️ Gender balance required: {MIN_GENDER_SIZE} Opens (You: {count_open}) and {MIN_GENDER_SIZE} Womens (You: {count_women}).")
+    elif not has_captains:
+        st.warning("⚠️ Please designate a Captain for both divisions (🌟).")
+    elif total_spent > BUDGET_LIMIT:
+        st.error(f"⚠️ Over budget! You spent {total_spent} / {BUDGET_LIMIT}.")
     else:
-        st.success(f"✅ Ready, {manager_name}!")
-        if st.button("🚀 SUBMIT FINAL TEAM", use_container_width=True):
+        st.success(f"✅ Your team of {ROSTER_SIZE} is valid, {manager_name}!")
+        
+        # 3. The Actual Database Action
+        if st.button("🚀 SUBMIT / UPDATE FINAL TEAM", use_container_width=True):
             try:
-                data = conn.read(worksheet=RESULTS_TEAMS_TAB, ttl=0)
-                sorted_names = list(open_roster['name']) + list(women_roster['name'])
-                new_row = {"Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "Manager_Name": manager_name, "Total_Cost": total_spent, "Open_Captain": st.session_state.captain_open, "Women_Captain": st.session_state.captain_women}
-                for i in range(9): new_row[f"Player_{i+1}"] = sorted_names[i] if i < len(sorted_names) else ""
-                conn.update(worksheet=RESULTS_TEAMS_TAB, data=pd.concat([data, pd.DataFrame([new_row])], ignore_index=True))
-                st.session_state.submitted = True; st.rerun()
-            except Exception as e: st.error(f"Error: {e}")
-else: st.info(f"Progress: {len(st.session_state.roster)} / 9")
+                # STEP A: Check if manager exists with this PIN
+                m_check = conn.table("managers").select("id").eq("manager_name", manager_name).eq("pin", manager_pin).execute()
+                
+                if m_check.data:
+                    # EXISTING MANAGER: Use their ID and wipe their old roster
+                    m_id = m_check.data[0]['id']
+                    conn.table("rosters").delete().eq("manager_id", m_id).execute()
+                else:
+                    # NEW MANAGER: Create them and get the ID
+                    m_insert = conn.table("managers").insert({"manager_name": manager_name, "pin": manager_pin}).execute()
+                    m_id = m_insert.data[0]['id']
+
+                # STEP B: Prepare the n new roster rows
+                new_entries = []
+                for p_name in st.session_state.roster:
+                    p_info = df_players[df_players['name'] == p_name].iloc[0]
+                    new_entries.append({
+                        "manager_id": m_id,
+                        "player_id": p_info['id'],
+                        "division": p_info['division'],
+                        "is_captain": (p_name == st.session_state.captain_open or p_name == st.session_state.captain_women)
+                    })
+
+                # STEP C: Push to Supabase
+                conn.table("rosters").insert(new_entries).execute()
+                
+                st.session_state.submitted = True
+                st.balloons()
+                st.rerun()
+
+            except Exception as e:
+                st.error(f"❌ Database Error: {e}")
+
+else:
+    # 4. Progress Feedback (Hides the button if they don't have n players)
+    st.info(f"📋 Progress: {roster_count} / {ROSTER_SIZE} players selected. Add {ROSTER_SIZE - roster_count} more to submit.")
+    st.button("🚀 SUBMIT FINAL TEAM", disabled=True, use_container_width=True, help=f"Select {ROSTER_SIZE} players first!")
