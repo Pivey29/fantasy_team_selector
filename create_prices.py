@@ -1,68 +1,62 @@
 import pandas as pd
 import numpy as np
-from matplotlib import pyplot as plt
+from st_supabase_connection import SupabaseConnection
+import streamlit as st
+from config import TABLE_PLAYERS, MEAN, STD_DEV, DIV_OPEN_LABEL, DIV_WOMEN_LABEL
 
-np.random.seed(43)
+# connect to DB
+conn = st.connection("supabase", type=SupabaseConnection)
 
-df = pd.read_csv("data/ratings.csv")
-print(len(df))
-df.head()
-
-open = df[df["division"] == "Opens"]
-women = df[df["division"] == "Womens"]
-
-def get_prices(df: pd.DataFrame):
-    # sort on sum of ratings
-    df = df.sort_values(by='total', ascending=False).reset_index(drop=True)
-    num_players = len(df)
-
-    bell_values = np.random.normal(loc=12, scale=7, size=num_players)
+def calculate_bell_prices(sub_df):
+    np.random.seed(42)
+    sub_df = sub_df.sort_values(by="total", ascending=False).reset_index(drop=True)
+    num_players = len(sub_df)
+    
+    # Your specific bell curve parameters
+    bell_values = np.random.normal(loc=MEAN, scale=STD_DEV, size=num_players)
     bell_values = np.sort(bell_values)[::-1]
     
-    df['price'] = bell_values.round().astype(int)
-    # df['price'] = df.groupby('total')['price'].transform('max')
-    df['price'] = df['price'].clip(lower=3)
-
-    print(f"Total Talent Cost: {df['price'].sum()}")
-    print(f"Average Player Cost: {df['price'].mean():.2f}")
-    print(f"Cost of a 'Dream Team' (Top 9): {df['price'].head(9).sum()}")
+    sub_df["price"] = bell_values.round().astype(int)
+    sub_df["price"] = sub_df["price"].clip(lower=3) # floor price of 3
     
-    return df
+    # ensure players with the same "total" have the same "price"
+    sub_df["price"] = sub_df.groupby("total")["price"].transform("max")
+    return sub_df
 
-
-def get_prices_(df: pd.DataFrame):
-    df = df.sort_values(by='total', ascending=False).reset_index(drop=True)
-    num_players = len(df)
+def calculate_pricing():
+    # fetch all players who have submitted rankings
+    res = (conn.client.schema("prd")
+           .table(TABLE_PLAYERS)
+           .select("*")
+           .eq("has_submitted_rank", True)
+           .execute())
+    df = pd.DataFrame(res.data)
     
-    # Create a smooth line from 25 down to 3
-    # This ensures a gradual drop-off regardless of random luck
-    prices = np.linspace(25, 3, num_players)
+    if df.empty:
+        print("No player data found to price.")
+        return
+
+    # 3. Calculate "total" first (Sum of the 5 skill columns)
+    skill_cols = ["throwing", "catching", "athleticism", "defense", "game_iq"]
+    df["total"] = df[skill_cols].sum(axis=1)
+
+    # 4. Apply your Bell Curve Logic per Division
+    # Split, Price, and Recombine
+    open_df = calculate_bell_prices(df[df["division"].lower() == DIV_OPEN_LABEL])  # TODO
+    women_df = calculate_bell_prices(df[df["division"].lower() == DIV_WOMEN_LABEL])  # TODO
+    final_df = pd.concat([open_df, women_df])
+    print(F"DEBUG:\n{final_df}\n")
+
+    # 5. Push Updates to Supabase
+    print(f"Updating {len(final_df)} player prices in Database...")
+    for _, row in final_df.iterrows():
+        conn.client.schema("prd").table(TABLE_PLAYERS).update({
+            "total": int(row["total"]),
+            "price": int(row["price"])
+        }).eq("id", row["id"]).execute()
     
-    df['price'] = prices.round().astype(int)
-    
-    # Still group by total to ensure equal talent = equal price
-    df['price'] = df.groupby('total')['price'].transform('max')
-    
-    return df
+    print("✅ Database pricing sync complete!")
 
 
-df = get_prices(df)
-
-plt.hist(df['price'], bins=10)
-plt.ylabel("Count of Players")
-plt.xlabel("Cost")
-
-women = get_prices(women)
-open = get_prices(open)
-
-plt.hist(open['price'], bins=10, color="green", alpha=0.3, label="open")
-plt.hist(women['price'], bins=10, color="blue", alpha=0.3, label="women")
-plt.ylabel("Count of Players")
-plt.xlabel("Cost")
-plt.legend()
-
-all = (pd.concat([open, women], ignore_index=True)
-       .sort_values(by=["price", "total"], ascending=False).
-       reset_index(drop=True))
-
-all.to_csv("data/test.csv", index=False)
+if __name__ == "__main__":
+    calculate_pricing()
