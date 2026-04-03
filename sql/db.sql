@@ -1,7 +1,5 @@
---DROP TABLE IF EXISTS rosters;
---DROP TABLE IF EXISTS managers;
---DROP TABLE IF EXISTS players;
---DROP TABLE IF EXISTS transfer_logs;
+-- Cleanup (Optional, keep commented unless resetting)
+-- DROP SCHEMA IF EXISTS prd CASCADE;
 
 -- Create the Schema
 CREATE SCHEMA IF NOT EXISTS prd;
@@ -17,8 +15,8 @@ CREATE TABLE prd.players (
     athleticism NUMERIC DEFAULT 0,
     defense NUMERIC DEFAULT 0,
     game_iq NUMERIC DEFAULT 0,
-    total NUMERIC DEFAULT 0,  -- calculated
-    price NUMERIC DEFAULT 0, -- calculated
+    total NUMERIC DEFAULT 0,
+    price NUMERIC DEFAULT 0,
     has_submitted_rank BOOLEAN DEFAULT FALSE
 );
 
@@ -27,7 +25,7 @@ CREATE TABLE prd.managers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     manager_name TEXT NOT NULL,
     pin TEXT NOT NULL, 
-    created_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT now(),
     transfers_used INTEGER DEFAULT 0,
     captain_changes_used INTEGER DEFAULT 0
 );
@@ -39,60 +37,52 @@ CREATE TABLE prd.rosters (
     player_id UUID REFERENCES prd.players(id),
     is_captain BOOLEAN DEFAULT FALSE,
     division TEXT NOT NULL, 
-    acquired_at TIMESTAMPTZ,
-    valid_from TIMESTAMPTZ,
-    valid_to TIMESTAMPTZ -- currently active
+    acquired_at TIMESTAMPTZ DEFAULT now(),
+    valid_from TIMESTAMPTZ DEFAULT now(),
+    valid_to TIMESTAMPTZ -- NULL means currently active
 );
 
--- 4. Player Scores (The Daily Ledger)
+-- 4. Player Scores
 CREATE TABLE prd.player_scores (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     player_id UUID NOT NULL REFERENCES prd.players(id) ON DELETE CASCADE,
-    day_number INTEGER NOT NULL, -- 1, 2, 3...
+    day_number INTEGER NOT NULL,
     points_earned NUMERIC DEFAULT 0,
-    updated_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ DEFAULT now(),
     
-    -- UNIQUE constraint: One player can only have one score record PER DAY
     CONSTRAINT unique_player_day UNIQUE (player_id, day_number)
 );
 
--- 5. Indexes for Speed
-CREATE INDEX idx_roster_active_lookup ON prd.rosters (manager_id, valid_from, valid_to);
-CREATE INDEX idx_scores_lookup ON prd.player_scores (player_id, day_number);
-
--- 6. Security (RLS)
+-- 5. Security & Permissions (The "No-Headache" Configuration)
+-- Enable RLS on all
 ALTER TABLE prd.players ENABLE ROW LEVEL SECURITY;
 ALTER TABLE prd.managers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE prd.rosters ENABLE ROW LEVEL SECURITY;
 ALTER TABLE prd.player_scores ENABLE ROW LEVEL SECURITY;
 
--- Simple "Public Read" policies for all tables
-CREATE POLICY "Allow public read players" ON prd.players FOR SELECT USING (true);
-CREATE POLICY "Allow public read managers" ON prd.managers FOR SELECT USING (true);
-CREATE POLICY "Allow public read rosters" ON prd.rosters FOR SELECT USING (true);
-CREATE POLICY "Allow public read scores" ON prd.player_scores FOR SELECT USING (true);
+-- Create "Universal Access" Policies for the App
+-- Players: Read for all, Update for self-ranking
+CREATE POLICY "Public Players" ON prd.players FOR ALL USING (true) WITH CHECK (true);
 
--- 1. Grant "Usage" (the ability to enter the schema)
+-- Managers: Read, Insert (signup), Update (transfers)
+CREATE POLICY "Public Managers" ON prd.managers FOR ALL USING (true) WITH CHECK (true);
+
+-- Rosters: Read, Insert, Update (sunset), Delete (draft resets)
+CREATE POLICY "Public Rosters" ON prd.rosters FOR ALL USING (true) WITH CHECK (true);
+
+-- Scores: Read, Insert/Update (via sync script)
+CREATE POLICY "Public Scores" ON prd.player_scores FOR ALL USING (true) WITH CHECK (true);
+
+-- 6. Grant Schema Access
 GRANT USAGE ON SCHEMA prd TO anon, authenticated, service_role;
 
--- 2. Grant "Select" (the ability to read data) on all current tables
-GRANT SELECT ON ALL TABLES IN SCHEMA prd TO anon, authenticated, service_role;
+-- 7. Grant Table Permissions (ALL is safer for your rapid development)
+GRANT ALL ON ALL TABLES IN SCHEMA prd TO anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA prd TO anon, authenticated, service_role;
 
--- 3. Grant "Insert/Update" (the ability to submit ratings/drafts)
-GRANT INSERT, UPDATE ON ALL TABLES IN SCHEMA prd TO anon, authenticated, service_role;
-
--- 4. Ensure future tables in this schema also get these permissions
+-- 8. Ensure future tables inherit these rights
 ALTER DEFAULT PRIVILEGES IN SCHEMA prd 
-GRANT SELECT, INSERT, UPDATE ON TABLES TO anon, authenticated, service_role;
+GRANT ALL ON TABLES TO anon, authenticated, service_role;
 
-CREATE POLICY "Allow public read access" ON prd.players
-  FOR SELECT USING (true);
-
--- 3. Allow the app to update rows (for the ranking form)
-CREATE POLICY "Allow public update access" ON prd.players
-  FOR UPDATE USING (true);
-
--- 4. Final cache refresh
-NOTIFY pgrst, 'reload schema';
-
+-- 9. Refresh API Cache
 NOTIFY pgrst, 'reload schema';

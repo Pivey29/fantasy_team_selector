@@ -1,4 +1,5 @@
 import streamlit as st
+import textwrap
 import pandas as pd
 import pytz
 import time
@@ -144,9 +145,8 @@ def get_processed_results(conn):
             "is_captain, manager_id, managers(manager_name), player_id, players(name)"
         ).is_("valid_to", "null").execute()
         
-        # Pull Scores from public (as requested)
-        # TODO using public for now
-        score_res = conn.client.schema("public").table(TABLE_SCORES).select("player_id, total_score").execute()
+        # Pull Scores
+        score_res = conn.client.schema("prd").table(TABLE_SCORES).select("player_id, points_earned").execute()
         
         if not roster_res.data:
             return pd.DataFrame(), pd.DataFrame()
@@ -158,13 +158,13 @@ def get_processed_results(conn):
         })
 
         if not score_res.data:
-            df_scores = pd.DataFrame(columns=['player_id', 'total_score'])
+            df_scores = pd.DataFrame(columns=['player_id', 'points_earned'])
         else:
-            df_scores = pd.DataFrame(score_res.data).groupby('player_id')['total_score'].sum().reset_index()
+            df_scores = pd.DataFrame(score_res.data).groupby('player_id')['points_earned'].sum().reset_index()
 
         merged = df_rosters.merge(df_scores, on="player_id", how="left").fillna(0)
         merged['calc_pts'] = merged.apply(
-            lambda x: x['total_score'] * CAPTAIN_MULTIPLIER if x['is_captain'] else x['total_score'], 
+            lambda x: x['points_earned'] * CAPTAIN_MULTIPLIER if x['is_captain'] else x['points_earned'], 
             axis=1
         )
 
@@ -222,8 +222,36 @@ def show_main_interface(is_live):
     with col_l2:
         manager_pin = st.text_input(pin_label, key="mgr_pin_persistent", type="password", max_chars=PIN_LENGTH)
 
-    if st.session_state.submitted: st.success("🎉 Team submitted!"); st.stop()
-    if not manager_name or len(manager_pin) < PIN_LENGTH: st.info("👋 Log in to begin."); st.stop()
+    if st.session_state.submitted:
+
+        st.title("🎉 Team Successfully Locked!")
+        st.balloons()
+    
+        st.success(f"Great job, {manager_name}! Your roster for {TOURNAMENT_NAME} is officially registered.")
+    
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("🛡️ Your Squad")
+            # Filter the original dataframe to show only their selected names
+            final_df = df_players[df_players['name'].isin(st.session_state.roster)]
+            for _, row in final_df.iterrows():
+                is_cap = row['name'] in [st.session_state.captain_open, st.session_state.captain_women]
+                st.write(f"{'⭐' if is_cap else '•'} {row['name']} ({row['team']})")
+                
+        with col2:
+            st.subheader("📊 Financials")
+            total_spent = final_df['price'].sum()
+            st.metric("Total Value", f"{total_spent} units")
+            st.metric("Remaining Budget", f"{BUDGET_LIMIT - total_spent} units")
+            
+        st.info("💡 You can log back in anytime before the tournament starts to make changes.")
+        
+        if st.button("⬅️ Back to Editor"):
+            st.session_state.submitted = False
+            st.rerun()
+            
+        st.stop()        
+    if not manager_name or len(manager_pin) < PIN_LENGTH: st.info("👋 Register / Log in to begin."); st.stop()
 
     # Authentication Logic
     auth_key = f"{manager_name}:{manager_pin}"
@@ -288,7 +316,7 @@ def show_main_interface(is_live):
             if is_live and 'full_data' in locals() and not full_data.empty:
                 my_points = full_data[full_data['Manager_Name'] == manager_name]
                 if not my_points.empty:
-                    st.dataframe(my_points[['player_name', 'total_score', 'is_captain', 'calc_pts']], hide_index=True, use_container_width=True)
+                    st.dataframe(my_points[['player_name', 'points_earned', 'is_captain', 'calc_pts']], hide_index=True, use_container_width=True)
                 else: 
                     st.write(f"**Players:** {', '.join(st.session_state.roster)}")
             else: 
@@ -352,7 +380,19 @@ def show_main_interface(is_live):
 
     # --- 9. DRAFT INTERFACE ---
     with st.expander("📖 **Draft Rules**", expanded=not is_live):
-        st.markdown(f"Build **{ROSTER_SIZE} players** | **{BUDGET_LIMIT} units** | Min **{MIN_GENDER_SIZE} per div** | Max **{MAX_TEAM_SIZE} per club**")
+        rules_text = textwrap.dedent(f"""
+            * Select a full roster (**{ROSTER_SIZE} players**)
+            * **{BUDGET_LIMIT}** units to spend
+            * Min **{MIN_GENDER_SIZE}** per division
+            * Max **{MAX_TEAM_SIZE}** per club
+            * Select 1 captain per division
+            
+            **Scoring:**
+            * 1 point per assist / goal
+            * 2 points per callahan
+            * Captains earn **double points**
+            """)
+        st.markdown(rules_text)
 
     if not is_live or st.session_state.get('edit_mode'):
         m_cols = st.columns(5 if is_live else 3)
@@ -399,120 +439,122 @@ def show_main_interface(is_live):
                             st.session_state.roster.append(p_n)
                             st.rerun()
 
-        # --- SUBMISSION LOGIC ---
+# --- 10. UNIFIED SUBMISSION LOGIC ---
         st.divider()
-        if len(st.session_state.roster) == ROSTER_SIZE and st.session_state.captain_open and st.session_state.captain_women:
+        
+        # Define the baseline requirements
+        squad_complete = len(st.session_state.roster) == ROSTER_SIZE
+        captains_set = st.session_state.captain_open and st.session_state.captain_women
+        
+        if squad_complete and captains_set:
+            # Common variables for both modes
+            sast = pytz.timezone('Africa/Johannesburg')
+            now_ts = datetime.now(sast).strftime('%Y-%m-%d %H:%M:%S')
+            new_caps = {st.session_state.captain_open, st.session_state.captain_women}
+
             if not is_live:
-                if st.button("🚀 SUBMIT FINAL TEAM", use_container_width=True):
+                # --- DRAFT MODE SUBMISSION ---
+                if st.button("🚀 SUBMIT FINAL TEAM", use_container_width=True, type="primary"):
                     try:
-                        sast = pytz.timezone('Africa/Johannesburg')
-                        now_ts = datetime.now(sast).strftime('%Y-%m-%d %H:%M:%S')
                         if not m_id:
-                            m_id = conn.client.schema("prd").table(TABLE_MANAGERS).insert({"manager_name": manager_name, "pin": manager_pin, "created_at": now_ts}).execute().data[0]['id']
+                            res = conn.client.schema("prd").table(TABLE_MANAGERS).insert({
+                                "manager_name": manager_name, 
+                                "pin": manager_pin, 
+                                "created_at": now_ts,
+                                "transfers_used": 0,
+                                "captain_changes_used": 0
+                            }).execute()
+                            m_id = res.data[0]['id']
+                        
+                        # Clear and replace roster
                         conn.client.schema("prd").table(TABLE_ROSTERS).delete().eq("manager_id", m_id).execute()
+                        
                         rows = []
                         for p in st.session_state.roster:
                             p_i = df_players[df_players['name'] == p].iloc[0]
-                            rows.append({"manager_id": m_id, "player_id": p_i['id'], "division": p_i['division'], "is_captain": (p in [st.session_state.captain_open, st.session_state.captain_women]), "acquired_at": now_ts, "valid_from": now_ts})
+                            rows.append({
+                                "manager_id": m_id, 
+                                "player_id": p_i['id'], 
+                                "division": p_i['division'], 
+                                "is_captain": (p in new_caps), 
+                                "acquired_at": now_ts, 
+                                "valid_from": now_ts
+                            })
                         conn.client.schema("prd").table(TABLE_ROSTERS).insert(rows).execute()
                         st.session_state.submitted = True; st.balloons(); st.rerun()
-                    except Exception as e: st.error(f"Error: {e}")
+                    except Exception as e: st.error(f"Draft Error: {e}")
+
             else:
-                # Live Update logic
-                # st.subheader("📝 Pending Changes")
+                # --- LIVE MODE (TRANSFER) SUBMISSION ---
                 p_in = set(st.session_state.roster) - st.session_state.db_names
                 p_out = st.session_state.db_names - set(st.session_state.roster)
-                new_caps = {st.session_state.captain_open, st.session_state.captain_women}
                 caps_in = new_caps - st.session_state.db_caps
-                
-                if (st.session_state.auth_user['transfers_used'] + len(p_in)) > MAX_PLAYER_TRANSFERS: st.error("⚠️ Swap limit exceeded!")
-                elif (st.session_state.auth_user['captain_changes_used'] + len(caps_in)) > MAX_CAPTAIN_CHANGES: st.error("⚠️ Captain limit exceeded!")
-        
-        # --- SUBMISSION LOGIC (LIVE UPDATES) ---
-        if is_live:
-            # 1. Calculate the 'Outs' for Captains
-            caps_out = st.session_state.db_caps - new_caps
-            
-            # 2. Show Summary if anything has changed
-            if p_in or p_out or caps_in or caps_out:
-                st.divider()
-                st.subheader("📝 Pending Changes")
-                c_in, c_out = st.columns(2)
-                
-                with c_in:
-                    if p_in: st.success(f"➕ **Adding:** {', '.join(p_in)}")
-                    if caps_in: st.info(f"⭐ **Promoting to Captain:** {', '.join(caps_in)}")
-                
-                with c_out:
-                    if p_out: st.error(f"➖ **Removing:** {', '.join(p_out)}")
-                    if caps_out: st.warning(f"⚪ **Demoting Captain:** {', '.join(caps_out)}")
+                caps_out = st.session_state.db_caps - new_caps
 
-                # 3. Validation and Confirm Button
-                # Check limits
-                limit_p = st.session_state.auth_user['transfers_used'] + len(p_in)
-                limit_c = st.session_state.auth_user['captain_changes_used'] + len(caps_in)
+                if p_in or p_out or caps_in or caps_out:
+                    st.subheader("📝 Pending Changes")
+                    c_in, c_out = st.columns(2)
+                    with c_in:
+                        if p_in: st.success(f"➕ **Adding:** {', '.join(p_in)}")
+                        if caps_in: st.info(f"⭐ **New Captain:** {', '.join(caps_in)}")
+                    with c_out:
+                        if p_out: st.error(f"➖ **Removing:** {', '.join(p_out)}")
+                        if caps_out: st.warning(f"⚪ **Demoting:** {', '.join(caps_out)}")
 
-                if limit_p > MAX_PLAYER_TRANSFERS:
-                    st.error(f"🚫 Swap limit exceeded! ({limit_p}/{MAX_PLAYER_TRANSFERS})")
-                elif limit_c > MAX_CAPTAIN_CHANGES:
-                    st.error(f"🚫 Captain limit exceeded! ({limit_c}/{MAX_CAPTAIN_CHANGES})")
-                elif len(st.session_state.roster) == ROSTER_SIZE and st.session_state.captain_open and st.session_state.captain_women:
-                    if st.button("💾 CONFIRM & UPDATE", type="primary", use_container_width=True):
-                        try:
-                            sast = pytz.timezone('Africa/Johannesburg')
-                            now_ts = datetime.now(sast).strftime('%Y-%m-%d %H:%M:%S')
-                            
-                            # Get current DB state to handle sunsets
-                            active_db = conn.client.schema("prd").table(TABLE_ROSTERS).select("id, player_id, is_captain, players(name)").eq("manager_id", m_id).is_("valid_to", "null").execute().data
-                            active_map = {r['players']['name']: {'is_cap': r['is_captain'], 'id': r['id']} for r in active_db}
-                            
-                            # Logic: If player removed OR captain status changed, sunset the old row
-                            to_sunset = [data['id'] for p_n, data in active_map.items() if p_n not in st.session_state.roster or (p_n in new_caps) != data['is_cap']]
-                            # Logic: If player is new OR captain status changed, insert a new row
-                            to_insert = [p_n for p_n in st.session_state.roster if p_n not in active_map or (p_n in new_caps) != active_map[p_n]['is_cap']]
-                            
-                            if to_sunset:
-                                conn.client.schema("prd").table(TABLE_ROSTERS).update({"valid_to": now_ts}).in_("id", to_sunset).execute()
-                            
-                            if to_insert:
-                                rows = []
-                                for p_n in to_insert:
-                                    p_i = df_players[df_players['name'] == p_n].iloc[0]
-                                    rows.append({
-                                        "manager_id": m_id, 
-                                        "player_id": p_i['id'], 
-                                        "division": p_i['division'], 
-                                        "is_captain": (p_n in new_caps), 
-                                        "valid_from": now_ts, 
-                                        "acquired_at": now_ts if p_n not in active_map else now_ts # Keep orig date if just a cap change
-                                    })
-                                conn.client.schema("prd").table(TABLE_ROSTERS).insert(rows).execute()
-                            
-                            # Update Manager Stats
-                            conn.client.schema("prd").table(TABLE_MANAGERS).update({
-                                "transfers_used": limit_p, 
-                                "captain_changes_used": limit_c
-                            }).eq("id", m_id).execute()
-                            
-                            st.session_state.update_success = True
-                            st.session_state.edit_mode = False
-                            st.cache_data.clear()
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Sync Error: {e}")
+                    # Limit Calculation
+                    limit_p = st.session_state.auth_user.get('transfers_used', 0) + len(p_in)
+                    limit_c = st.session_state.auth_user.get('captain_changes_used', 0) + len(caps_in)
 
+                    if limit_p > MAX_PLAYER_TRANSFERS:
+                        st.error(f"🚫 Swap limit exceeded! ({limit_p}/{MAX_PLAYER_TRANSFERS})")
+                    elif limit_c > MAX_CAPTAIN_CHANGES:
+                        st.error(f"🚫 Captain limit exceeded! ({limit_c}/{MAX_CAPTAIN_CHANGES})")
+                    else:
+                        if st.button("💾 CONFIRM & UPDATE", type="primary", use_container_width=True):
+                            try:
+                                # 1. Update Roster rows (Sunset old, Insert new)
+                                active_db = conn.client.schema("prd").table(TABLE_ROSTERS).select("id, player_id, is_captain, players(name)").eq("manager_id", m_id).is_("valid_to", "null").execute().data
+                                active_map = {r['players']['name']: {'is_cap': r['is_captain'], 'id': r['id']} for r in active_db}
+                                
+                                to_sunset = [data['id'] for p_n, data in active_map.items() if p_n not in st.session_state.roster or (p_n in new_caps) != data['is_cap']]
+                                to_insert = [p_n for p_n in st.session_state.roster if p_n not in active_map or (p_n in new_caps) != active_map[p_n]['is_cap']]
+                                
+                                if to_sunset:
+                                    conn.client.schema("prd").table(TABLE_ROSTERS).update({"valid_to": now_ts}).in_("id", to_sunset).execute()
+                                if to_insert:
+                                    ins_rows = []
+                                    for p_n in to_insert:
+                                        p_i = df_players[df_players['name'] == p_n].iloc[0]
+                                        ins_rows.append({
+                                            "manager_id": m_id, "player_id": p_i['id'], "division": p_i['division'],
+                                            "is_captain": (p_n in new_caps), "valid_from": now_ts, "acquired_at": now_ts
+                                        })
+                                    conn.client.schema("prd").table(TABLE_ROSTERS).insert(ins_rows).execute()
+                                
+                                # 2. Update Manager Table (Increment)
+                                print(f"DEBUG transfers: {limit_p}, {limit_p}")
+                                conn.client.schema("prd").table(TABLE_MANAGERS).update({
+                                    "transfers_used": limit_p, 
+                                    "captain_changes_used": limit_c
+                                }).eq("id", m_id).execute()
+                                
+                                # 3. Sync Session State so UI updates before rerun
+                                st.session_state.auth_user['transfers_used'] = limit_p
+                                st.session_state.auth_user['captain_changes_used'] = limit_c
+                                
+                                st.session_state.update_success = True
+                                st.session_state.edit_mode = False
+                                st.cache_data.clear()
+                                st.rerun()
+                            except Exception as e: st.error(f"Sync Error: {e}")
         else:
-            # Tell the user exactly what is missing!
+            # Feedback for incomplete squad
             missing = []
-            if len(st.session_state.roster) < ROSTER_SIZE: 
-                missing.append(f"{ROSTER_SIZE - len(st.session_state.roster)} more players")
-            if not st.session_state.captain_open: 
-                missing.append("an Open Captain (⭐)")
-            if not st.session_state.captain_women: 
-                missing.append("a Women's Captain (⭐)")
-            
-            if len(st.session_state.roster) > 0:
-                st.warning(f"⚠️ **To Submit, you still need:** {', '.join(missing)}")
+            if len(st.session_state.roster) < ROSTER_SIZE: missing.append(f"{ROSTER_SIZE - len(st.session_state.roster)} more players")
+            if not st.session_state.captain_open: missing.append("an Open Captain (⭐)")
+            if not st.session_state.captain_women: missing.append("a Women's Captain (⭐)")
+            if st.session_state.roster:
+                st.warning(f"⚠️ **Almost there:** {', '.join(missing)}")
 
 # --- MAIN ROUTER ---
 if STAGE == "RATINGS":
