@@ -66,6 +66,9 @@ if 'auth_key' not in st.session_state: st.session_state.auth_key = None
 # Global Data Load
 df_players = load_player_data()
 STAGE = get_current_stage()
+# --- FETCH MANAGERS FOR DROPDOWN ---
+mgr_query = conn.client.schema("prd").table(TABLE_MANAGERS).select("manager_name").execute()
+all_manager_names = [m['manager_name'] for m in mgr_query.data]
 
 # --- 5. PHASE: RATINGS ---
 def show_ratings_phase():
@@ -200,7 +203,7 @@ def show_main_interface(is_live):
         st.divider()
 
     # --- DRAFTING / LOGIN LOGIC ---
-    if is_live: st.subheader("🛡️ Manager Portal")
+    if is_live: st.subheader("🛡️ Manager Portal - Transfers")
     else: st.title(f"🏆 {TOURNAMENT_NAME}")
 
     if st.session_state.get('update_success'):
@@ -208,25 +211,50 @@ def show_main_interface(is_live):
         st.session_state['update_success'] = False
 
     col_l1, col_l2 = st.columns(2)
+
     with col_l1:
-        manager_name = st.text_input("Manager Name:", key="mgr_name_persistent").strip()
-    
-    # Dynamic PIN label based on if it's a new or existing manager (Only in Draft stage)
-    pin_label = f"{PIN_LENGTH}-digit PIN:"
-    if not is_live and manager_name:
-        name_key = f"name_exists_{manager_name}"
-        if name_key not in st.session_state:
-            st.session_state[name_key] = bool(conn.client.schema("prd").table(TABLE_MANAGERS).select("id").eq("manager_name", manager_name).execute().data)
-        pin_label = "🔓 Enter PIN:" if st.session_state[name_key] else "✨ Create PIN:"
-    
+        if is_live:
+            # 1. LIVE MODE: Strict list of existing managers only
+            manager_name = st.selectbox(
+                "Select Your Manager Name:", 
+                options=all_manager_names, 
+                index=None, 
+                placeholder="Choose your name...",
+                key="mgr_name_select"
+            )
+            pin_label = "🔓 Enter PIN:"
+        else:
+            # 2. DRAFT MODE: Allow typing for new registrations (Option B logic)
+            manager_name = st.text_input(
+                "Manager Name:", 
+                placeholder="Type name to login or register...",
+                key="mgr_name_persistent"
+            ).strip()
+            
+            is_existing = manager_name in all_manager_names
+            if manager_name == "":
+                # st.caption("👋 Enter your name to begin.")
+                pin_label = "4-digit PIN:"
+            elif is_existing:
+                st.caption(f"✅ Found existing manager: **{manager_name}**")
+                pin_label = "🔓 Enter PIN:"
+            else:
+                st.caption(f"✨ New Manager detected! Choose a 4-digit PIN.")
+                pin_label = "🛡️ Create PIN:"
+
     with col_l2:
-        manager_pin = st.text_input(pin_label, key="mgr_pin_persistent", type="password", max_chars=PIN_LENGTH)
+        # The PIN box now uses the dynamic label from the logic above
+        manager_pin = st.text_input(
+            pin_label, 
+            key="mgr_pin_persistent", 
+            type="password", 
+            max_chars=PIN_LENGTH
+        )
 
     if st.session_state.submitted:
 
         st.title("🎉 Team Successfully Locked!")
         st.balloons()
-    
         st.success(f"Great job, {manager_name}! Your roster for {TOURNAMENT_NAME} is officially registered.")
     
         col1, col2 = st.columns(2)
@@ -244,14 +272,37 @@ def show_main_interface(is_live):
             st.metric("Total Value", f"{total_spent} units")
             st.metric("Remaining Budget", f"{BUDGET_LIMIT - total_spent} units")
             
-        st.info("💡 You can log back in anytime before the tournament starts to make changes.")
+        st.divider()
         
-        if st.button("⬅️ Back to Editor"):
-            st.session_state.submitted = False
-            st.rerun()
+        # --- ACTION BUTTONS ---
+        btn_col1, btn_col2 = st.columns(2)
+        
+        with btn_col1:
+            if st.button("⬅️ Edit This Team", use_container_width=True):
+                st.session_state.submitted = False
+                st.rerun()
+        
+        with btn_col2:
+            # THIS IS THE LOGOUT/NEW TEAM TRIGGER
+            if st.button("➕ Register Another Team", type="primary", use_container_width=True):
+                # Wipe all session keys to get back to a blank login
+                keys_to_reset = [
+                    'manager_id', 'auth_user', 'roster', 'db_names', 
+                    'db_caps', 'submitted', 'edit_mode', 'auth_key',
+                    'confirmed_mgr_name', 'confirmed_mgr_pin',
+                    'mgr_name_persistent', 'mgr_pin_persistent'
+                ]
+                for key in keys_to_reset:
+                    if key in st.session_state:
+                        del st.session_state[key]
+                
+                st.cache_data.clear()
+                st.rerun()
             
-        st.stop()        
-    if not manager_name or len(manager_pin) < PIN_LENGTH: st.info("👋 Register / Log in to begin."); st.stop()
+        st.stop()
+      
+    if not manager_name or len(manager_pin) < PIN_LENGTH:
+        st.stop()
 
     # Authentication Logic
     auth_key = f"{manager_name}:{manager_pin}"
@@ -301,14 +352,33 @@ def show_main_interface(is_live):
                         st.session_state.captain_women = p_n
             st.rerun()
 
-# --- 7. PHASE: DRAFT & LIVE ---
+    # --- 7. PHASE: DRAFT & LIVE ---
     if m_id:
-        st.success(f"✅ Authenticated: {manager_name}")
+        l_col1, l_col2 = st.columns([3, 1])
+        with l_col1:
+            st.success(f"✅ Authenticated: {manager_name}")
+        with l_col2:
+            if st.button("🚪 Logout", use_container_width=True):
+                # Wipe all user-specific data from the browser's memory
+                keys_to_reset = [
+                    'manager_id', 'auth_user', 'roster', 'db_names', 
+                    'db_caps', 'submitted', 'edit_mode', 'auth_key',
+                    'confirmed_mgr_name', 'confirmed_mgr_pin'
+                ]
+                for key in keys_to_reset:
+                    if key in st.session_state:
+                        del st.session_state[key]
+                
+                st.cache_data.clear()
+                st.rerun()
         
         # 1. Show Transfer Rules ONLY if Live
         if is_live:
             with st.expander("🔄 **How Transfers Work**", expanded=True):
-                st.markdown(f"* **{MAX_PLAYER_TRANSFERS} transfers allowed** | * **{MAX_CAPTAIN_CHANGES} captain changes allowed**")
+                st.markdown(f"""
+                            * **{MAX_PLAYER_TRANSFERS} transfers allowed**
+                            * **{MAX_CAPTAIN_CHANGES} captain changes allowed**
+                            """)
                 st.caption(f"Used: {st.session_state.auth_user.get('transfers_used', 0)} Transfers, {st.session_state.auth_user.get('captain_changes_used', 0)} Captain Changes")
         
         # 2. Show Current Roster
@@ -453,36 +523,61 @@ def show_main_interface(is_live):
             new_caps = {st.session_state.captain_open, st.session_state.captain_women}
 
             if not is_live:
-                # --- DRAFT MODE SUBMISSION ---
                 if st.button("🚀 SUBMIT FINAL TEAM", use_container_width=True, type="primary"):
                     try:
-                        if not m_id:
-                            res = conn.client.schema("prd").table(TABLE_MANAGERS).insert({
+                        sast = pytz.timezone('Africa/Johannesburg')
+                        now_ts = datetime.now(sast).strftime('%Y-%m-%d %H:%M:%S')
+                        
+                        # 1. TRAP: Check if manager already exists by NAME
+                        # This prevents the duplicate UUIDs seen in your screenshot
+                        existing_res = conn.client.schema("prd").table(TABLE_MANAGERS)\
+                            .select("id")\
+                            .eq("manager_name", manager_name)\
+                            .execute()
+                        
+                        if existing_res.data:
+                            # Use the existing ID
+                            active_m_id = existing_res.data[0]['id']
+                            # Optionally update the PIN/Timestamp if you want
+                        else:
+                            # Truly a new manager, so insert
+                            new_mgr = conn.client.schema("prd").table(TABLE_MANAGERS).insert({
                                 "manager_name": manager_name, 
                                 "pin": manager_pin, 
                                 "created_at": now_ts,
                                 "transfers_used": 0,
                                 "captain_changes_used": 0
                             }).execute()
-                            m_id = res.data[0]['id']
+                            active_m_id = new_mgr.data[0]['id']
                         
-                        # Clear and replace roster
-                        conn.client.schema("prd").table(TABLE_ROSTERS).delete().eq("manager_id", m_id).execute()
+                        # Set this to session state for safety
+                        st.session_state.manager_id = active_m_id
+
+                        # 2. CLEAR ROSTER (Now we know for sure which ID to wipe)
+                        conn.client.schema("prd").table(TABLE_ROSTERS).delete().eq("manager_id", active_m_id).execute()
                         
+                        # 3. INSERT NEW ROSTER
                         rows = []
+                        new_caps = {st.session_state.captain_open, st.session_state.captain_women}
                         for p in st.session_state.roster:
-                            p_i = df_players[df_players['name'] == p].iloc[0]
+                            p_info = df_players[df_players['name'] == p].iloc[0]
                             rows.append({
-                                "manager_id": m_id, 
-                                "player_id": p_i['id'], 
-                                "division": p_i['division'], 
+                                "manager_id": active_m_id, 
+                                "player_id": p_info['id'], 
+                                "division": p_info['division'], 
                                 "is_captain": (p in new_caps), 
                                 "acquired_at": now_ts, 
                                 "valid_from": now_ts
                             })
+                        
                         conn.client.schema("prd").table(TABLE_ROSTERS).insert(rows).execute()
-                        st.session_state.submitted = True; st.balloons(); st.rerun()
-                    except Exception as e: st.error(f"Draft Error: {e}")
+                        
+                        st.session_state.submitted = True
+                        st.balloons()
+                        st.rerun()
+                        
+                    except Exception as e: 
+                        st.error(f"Draft Submission Error: {e}")
 
             else:
                 # --- LIVE MODE (TRANSFER) SUBMISSION ---
@@ -532,11 +627,13 @@ def show_main_interface(is_live):
                                     conn.client.schema("prd").table(TABLE_ROSTERS).insert(ins_rows).execute()
                                 
                                 # 2. Update Manager Table (Increment)
-                                print(f"DEBUG transfers: {limit_p}, {limit_p}")
                                 conn.client.schema("prd").table(TABLE_MANAGERS).update({
                                     "transfers_used": limit_p, 
                                     "captain_changes_used": limit_c
                                 }).eq("id", m_id).execute()
+
+                                st.session_state.db_names = set(st.session_state.roster)
+                                st.session_state.db_caps = {st.session_state.captain_open, st.session_state.captain_women}
                                 
                                 # 3. Sync Session State so UI updates before rerun
                                 st.session_state.auth_user['transfers_used'] = limit_p
