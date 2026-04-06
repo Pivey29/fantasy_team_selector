@@ -40,7 +40,7 @@ TOURNAMENT_START_DT = datetime(2026, 4, 13, 8, 0, tzinfo=SAST) # Morning of Day 
 
 # --- 3. STAGE AUTOMATION ---
 # Set to "RATINGS", "DRAFT", "LIVE" to override, or None for Auto-mode
-MANUAL_STAGE = "RATINGS" 
+MANUAL_STAGE = "DRAFT" 
 
 def get_current_stage():
     if MANUAL_STAGE:
