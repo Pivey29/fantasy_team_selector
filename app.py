@@ -200,7 +200,7 @@ def show_main_interface(is_live):
         st.divider()
 
     # --- DRAFTING / LOGIN LOGIC ---
-    if is_live: st.subheader("🛡️ Manager Portal - Transfers")
+    if is_live: st.subheader("🛡️ Manager Transfer Portal")
     else: st.title(f"🏆 {TOURNAMENT_NAME}")
 
     if st.session_state.get('update_success'):
@@ -331,7 +331,7 @@ def show_main_interface(is_live):
             st.session_state.roster = names
             st.session_state.db_names = set(names)
             
-            # 2. Initialize db_caps (This was likely breaking your code)
+            # 2. Initialize db_caps
             st.session_state.db_caps = set() 
             
             # 3. Standardization for label comparison
@@ -375,6 +375,7 @@ def show_main_interface(is_live):
                 st.markdown(f"""
                             * **{MAX_PLAYER_TRANSFERS} transfers allowed**
                             * **{MAX_CAPTAIN_CHANGES} captain changes allowed**
+                            * Transfers can't be undone. Once you have confirmed your selection, they are final!
                             """)
                 st.caption(f"Used: {st.session_state.auth_user.get('transfers_used', 0)} Transfers, {st.session_state.auth_user.get('captain_changes_used', 0)} Captain Changes")
         
@@ -453,6 +454,11 @@ def show_main_interface(is_live):
             * Min **{MIN_GENDER_SIZE}** per division
             * Max **{MAX_TEAM_SIZE}** per club
             * Select 1 captain per division
+
+            **Transfers:**
+            * 2 transfers and 2 captain switches allowed per day.
+            * these changes will only come into effect the next day.
+            * points DO NOT count retrospectively for transfers.
             
             **Scoring:**
             * 1 point per assist / goal
