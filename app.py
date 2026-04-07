@@ -97,19 +97,22 @@ def show_ratings_phase():
         
         st.write("---")
         st.write("### Rate your skills (1-10)")
-        st.caption("These ratings will determine your draft price.")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            t = st.slider("Throwing", 0, 10, 0)
-            i = st.slider("Game IQ", 0, 10, 0)
-            a = st.slider("Athleticism", 0, 10, 0)
-        with col2:
-            a_g = st.slider("Average Assists per Game", 0, 7, 0)
-            a_a = st.slider("Average Goals per Game", 0, 7, 0)
+        st.caption("""
+            These ratings will determine your draft price.
+            * A 10 indicates you are the best in South Africa for that category.
+            * A 5 indicates you are an average player in South Africa for that category.
+            * A 1 indicates you are a complete rookie in South Africa for that category.
+                   """)
+        t = st.slider("Throwing", 1, 10, 1)
+        i = st.slider("Game IQ", 1, 10, 1)
+        a = st.slider("Athleticism", 1, 10, 1)
+
+        st.write("### Estimate your game averages")      
+        a_g = st.slider("Average Assists per Game", 0, 7, 0)
+        a_a = st.slider("Average Goals per Game", 0, 7, 0)
             
         st.write("---")
-        st.warning("Only submit a ranking for yourself!")
+        st.warning("Only submit a ranking for yourself! If you do not find your name. Please contact the admin.")
         
         if st.form_submit_button("Submit My Ranking", use_container_width=True):
             if not target_name:
