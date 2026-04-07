@@ -111,13 +111,10 @@ def show_ratings_phase():
             i = st.slider("Game IQ (Field Vision/Decisions)", 1, 10, 1)
             
         st.write("---")
-        confirm = st.checkbox("I confirm this is my name and my honest self-assessment.")
         
         if st.form_submit_button("Submit My Ranking", use_container_width=True):
             if not target_name:
                 st.error("❌ Please select your name from the search box.")
-            elif not confirm:
-                st.warning("⚠️ Please check the confirmation box.")
             else:
                 try:
                     player_uuid = name_to_id[target_name]
