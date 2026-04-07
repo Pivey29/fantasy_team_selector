@@ -108,8 +108,8 @@ def show_ratings_phase():
         a = st.slider("Athleticism", 1, 10, 1)
 
         st.write("### Estimate your game averages")      
-        a_g = st.slider("Average Assists per Game", 0, 7, 0)
-        a_a = st.slider("Average Goals per Game", 0, 7, 0)
+        a_a = st.slider("Average Assists per Game", 0, 7, 0)
+        a_g = st.slider("Average Goals per Game", 0, 7, 0)
             
         st.write("---")
         st.warning("Only submit a ranking for yourself! If you do not find your name. Please contact the admin.")
