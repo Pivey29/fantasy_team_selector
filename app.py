@@ -72,7 +72,6 @@ all_manager_names = [m['manager_name'] for m in mgr_query.data]
 # --- 5. PHASE: RATINGS ---
 def show_ratings_phase():
     st.title("⭐ Player Self-Ranking Portal")
-    
     unranked_df = df_players[df_players['has_submitted_rank'] == False]
     total_players = len(df_players)
     ranked_count = total_players - len(unranked_df)
@@ -110,7 +109,7 @@ def show_ratings_phase():
             a_a = st.slider("Average Goals per Game", 0, 7, 0)
             
         st.write("---")
-        st.warning("Do NOT submit rankings for a player that is not you.")
+        st.warning("Only submit a ranking for yourself!")
         
         if st.form_submit_button("Submit My Ranking", use_container_width=True):
             if not target_name:
