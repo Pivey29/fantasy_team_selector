@@ -8,10 +8,10 @@ TOURNAMENT_NAME = "OW Nationals 2026 - Fantasy Draft"
 DIV_OPEN_LABEL = "opens"
 DIV_WOMEN_LABEL = "womens"
 SCHEMA = "prd"
-ROSTER_SIZE = 9
+ROSTER_SIZE= 10
 BUDGET_LIMIT = 100
 MAX_GENDER_SIZE = 5
-MIN_GENDER_SIZE = 4
+MIN_GENDER_SIZE = 5
 MAX_TEAM_SIZE = 2
 CAPTAIN_MULTIPLIER = 2
 PIN_LENGTH = 4
@@ -40,7 +40,7 @@ TOURNAMENT_START_DT = datetime(2026, 4, 13, 8, 0, tzinfo=SAST) # Morning of Day 
 
 # --- 3. STAGE AUTOMATION ---
 # Set to "RATINGS", "DRAFT", "LIVE" to override, or None for Auto-mode
-MANUAL_STAGE = "LIVE" 
+MANUAL_STAGE = "RATINGS" 
 
 def get_current_stage():
     if MANUAL_STAGE:

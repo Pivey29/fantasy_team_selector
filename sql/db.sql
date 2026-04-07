@@ -1,5 +1,5 @@
 -- Cleanup (Optional, keep commented unless resetting)
--- DROP SCHEMA IF EXISTS prd CASCADE;
+--DROP SCHEMA IF EXISTS prd CASCADE;
 
 -- Create the Schema
 CREATE SCHEMA IF NOT EXISTS prd;
@@ -11,9 +11,9 @@ CREATE TABLE prd.players (
     team TEXT NOT NULL,
     division TEXT NOT NULL, 
     throwing NUMERIC DEFAULT 0,
-    catching NUMERIC DEFAULT 0,
+    avg_assists NUMERIC DEFAULT 0,
     athleticism NUMERIC DEFAULT 0,
-    defense NUMERIC DEFAULT 0,
+    avg_goals NUMERIC DEFAULT 0,
     game_iq NUMERIC DEFAULT 0,
     total NUMERIC DEFAULT 0,
     price NUMERIC DEFAULT 0,
@@ -76,7 +76,7 @@ CREATE POLICY "Public Scores" ON prd.player_scores FOR ALL USING (true) WITH CHE
 -- 6. Grant Schema Access
 GRANT USAGE ON SCHEMA prd TO anon, authenticated, service_role;
 
--- 7. Grant Table Permissions (ALL is safer for your rapid development)
+-- 7. Grant Table Permissions (ALL is safer for your rapid prdelopment)
 GRANT ALL ON ALL TABLES IN SCHEMA prd TO anon, authenticated, service_role;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA prd TO anon, authenticated, service_role;
 

@@ -37,7 +37,7 @@ conn = st.connection("supabase", type=SupabaseConnection)
 @st.cache_data(ttl=300)
 def load_player_data():
     try:
-        response = conn.client.schema("prd").table(TABLE_PLAYERS).select("*").execute()
+        response = conn.client.schema(SCHEMA).table(TABLE_PLAYERS).select("*").execute()
         df = pd.DataFrame(response.data)
         df.columns = df.columns.str.strip().str.lower()
         df['name'] = df['name'].str.strip()
@@ -45,7 +45,6 @@ def load_player_data():
             df['division'] = df['division'].astype(str).str.strip().str.lower()
         if 'team' in df.columns:
             df['team'] = df['team'].astype(str).str.strip()
-            print(f"DEBUG:\n{df.head(10)}")
         return df.sort_values(by='price', ascending=False)
     except Exception as e:
         st.error(f"Error loading player data: {e}")
@@ -67,7 +66,7 @@ if 'auth_key' not in st.session_state: st.session_state.auth_key = None
 df_players = load_player_data()
 STAGE = get_current_stage()
 # --- FETCH MANAGERS FOR DROPDOWN ---
-mgr_query = conn.client.schema("prd").table(TABLE_MANAGERS).select("manager_name").execute()
+mgr_query = conn.client.schema(SCHEMA).table(TABLE_MANAGERS).select("manager_name").execute()
 all_manager_names = [m['manager_name'] for m in mgr_query.data]
 
 # --- 5. PHASE: RATINGS ---
@@ -103,14 +102,15 @@ def show_ratings_phase():
         
         col1, col2 = st.columns(2)
         with col1:
-            t = st.slider("Throwing (Power/Accuracy)", 1, 10, 1)
-            c = st.slider("Catching (Reliability/Range)", 1, 10, 1)
-            a = st.slider("Athleticism (Speed/Vertical)", 1, 10, 1)
+            t = st.slider("Throwing", 0, 10, 0)
+            i = st.slider("Game IQ", 0, 10, 0)
+            a = st.slider("Athleticism", 0, 10, 0)
         with col2:
-            d = st.slider("Defense (Marking/Footwork)", 1, 10, 1)
-            i = st.slider("Game IQ (Field Vision/Decisions)", 1, 10, 1)
+            a_g = st.slider("Average Assists per Game", 0, 7, 0)
+            a_a = st.slider("Average Goals per Game", 0, 7, 0)
             
         st.write("---")
+        st.warning("Do NOT submit rankings for a player that is not you.")
         
         if st.form_submit_button("Submit My Ranking", use_container_width=True):
             if not target_name:
@@ -118,9 +118,9 @@ def show_ratings_phase():
             else:
                 try:
                     player_uuid = name_to_id[target_name]
-                    res = conn.client.schema("prd").table(TABLE_PLAYERS).update({
-                        "throwing": t, "catching": c, "athleticism": a,
-                        "defense": d, "game_iq": i,
+                    res = conn.client.schema(SCHEMA).table(TABLE_PLAYERS).update({
+                        "throwing": t, "avg_goals": a_g, "athleticism": a,
+                        "avg_assists": a_a, "game_iq": i,
                         "has_submitted_rank": True
                     }).eq("id", player_uuid).execute()
                     if len(res.data) > 0:
@@ -141,12 +141,12 @@ def get_processed_results(conn):
 
     try:
         # Pull Active Rosters from prd
-        roster_res = conn.client.schema("prd").table(TABLE_ROSTERS).select(
+        roster_res = conn.client.schema(SCHEMA).table(TABLE_ROSTERS).select(
             "is_captain, manager_id, managers(manager_name), player_id, players(name)"
         ).is_("valid_to", "null").execute()
         
         # Pull Scores
-        score_res = conn.client.schema("prd").table(TABLE_SCORES).select("player_id, points_earned").execute()
+        score_res = conn.client.schema(SCHEMA).table(TABLE_SCORES).select("player_id, points_earned").execute()
         
         if not roster_res.data:
             return pd.DataFrame(), pd.DataFrame()
@@ -304,7 +304,7 @@ def show_main_interface(is_live):
     # Authentication Logic
     auth_key = f"{manager_name}:{manager_pin}"
     if st.session_state.auth_key != auth_key:
-        auth_res = conn.client.schema("prd").table(TABLE_MANAGERS).select("*").eq("manager_name", manager_name).eq("pin", manager_pin).execute()
+        auth_res = conn.client.schema(SCHEMA).table(TABLE_MANAGERS).select("*").eq("manager_name", manager_name).eq("pin", manager_pin).execute()
         if auth_res.data:
             st.session_state.auth_user = auth_res.data[0]
             st.session_state.manager_id = auth_res.data[0]['id']
@@ -321,7 +321,7 @@ def show_main_interface(is_live):
     # Roster Sync
     m_id = st.session_state.manager_id
     if m_id and not st.session_state.roster:
-        curr = conn.client.schema("prd").table(TABLE_ROSTERS).select(
+        curr = conn.client.schema(SCHEMA).table(TABLE_ROSTERS).select(
             "is_captain, players(name, division)"
         ).eq("manager_id", m_id).is_("valid_to", "null").execute()
         
@@ -368,27 +368,29 @@ def show_main_interface(is_live):
                 
                 st.cache_data.clear()
                 st.rerun()
+                st.stop()
         
         # 1. Show Transfer Rules ONLY if Live
-        if is_live:
-            with st.expander("🔄 **How Transfers Work**", expanded=True):
-                st.markdown(f"""
-                            * **{MAX_PLAYER_TRANSFERS} transfers allowed**
-                            * **{MAX_CAPTAIN_CHANGES} captain changes allowed**
-                            * Transfers can't be undone. Once you have confirmed your selection, they are final!
-                            """)
-                st.caption(f"Used: {st.session_state.auth_user.get('transfers_used', 0)} Transfers, {st.session_state.auth_user.get('captain_changes_used', 0)} Captain Changes")
-        
-        # 2. Show Current Roster
-        with st.expander("📋 Your Current Roster", expanded=True):
-            if is_live and 'full_data' in locals() and not full_data.empty:
-                my_points = full_data[full_data['Manager_Name'] == manager_name]
-                if not my_points.empty:
-                    st.dataframe(my_points[['player_name', 'points_earned', 'is_captain', 'calc_pts']], hide_index=True, use_container_width=True)
+        if st.session_state.get('manager_id'):
+            if is_live:
+                with st.expander("🔄 **How Transfers Work**", expanded=True):
+                    st.markdown(f"""
+                                * **{MAX_PLAYER_TRANSFERS} transfers allowed**
+                                * **{MAX_CAPTAIN_CHANGES} captain changes allowed**
+                                * Transfers can't be undone. Once you have confirmed your selection, they are final!
+                                """)
+                    st.caption(f"Used: {st.session_state.auth_user.get('transfers_used', 0)} Transfers, {st.session_state.auth_user.get('captain_changes_used', 0)} Captain Changes")
+            
+            # 2. Show Current Roster
+            with st.expander("📋 Your Current Roster", expanded=True):
+                if is_live and 'full_data' in locals() and not full_data.empty:
+                    my_points = full_data[full_data['Manager_Name'] == manager_name]
+                    if not my_points.empty:
+                        st.dataframe(my_points[['player_name', 'points_earned', 'is_captain', 'calc_pts']], hide_index=True, use_container_width=True)
+                    else: 
+                        st.write(f"**Players:** {', '.join(st.session_state.roster)}")
                 else: 
                     st.write(f"**Players:** {', '.join(st.session_state.roster)}")
-            else: 
-                st.write(f"**Players:** {', '.join(st.session_state.roster)}")
 
         # 3. Transfer/Edit Logic Gate
         if not is_live:
@@ -533,7 +535,7 @@ def show_main_interface(is_live):
                         
                         # 1. TRAP: Check if manager already exists by NAME
                         # This prevents the duplicate UUIDs seen in your screenshot
-                        existing_res = conn.client.schema("prd").table(TABLE_MANAGERS)\
+                        existing_res = conn.client.schema(SCHEMA).table(TABLE_MANAGERS)\
                             .select("id")\
                             .eq("manager_name", manager_name)\
                             .execute()
@@ -544,7 +546,7 @@ def show_main_interface(is_live):
                             # Optionally update the PIN/Timestamp if you want
                         else:
                             # Truly a new manager, so insert
-                            new_mgr = conn.client.schema("prd").table(TABLE_MANAGERS).insert({
+                            new_mgr = conn.client.schema(SCHEMA).table(TABLE_MANAGERS).insert({
                                 "manager_name": manager_name, 
                                 "pin": manager_pin, 
                                 "created_at": now_ts,
@@ -557,7 +559,7 @@ def show_main_interface(is_live):
                         st.session_state.manager_id = active_m_id
 
                         # 2. CLEAR ROSTER (Now we know for sure which ID to wipe)
-                        conn.client.schema("prd").table(TABLE_ROSTERS).delete().eq("manager_id", active_m_id).execute()
+                        conn.client.schema(SCHEMA).table(TABLE_ROSTERS).delete().eq("manager_id", active_m_id).execute()
                         
                         # 3. INSERT NEW ROSTER
                         rows = []
@@ -573,7 +575,7 @@ def show_main_interface(is_live):
                                 "valid_from": now_ts
                             })
                         
-                        conn.client.schema("prd").table(TABLE_ROSTERS).insert(rows).execute()
+                        conn.client.schema(SCHEMA).table(TABLE_ROSTERS).insert(rows).execute()
                         
                         st.session_state.submitted = True
                         st.balloons()
@@ -611,14 +613,14 @@ def show_main_interface(is_live):
                         if st.button("💾 CONFIRM & UPDATE", type="primary", use_container_width=True):
                             try:
                                 # 1. Update Roster rows (Sunset old, Insert new)
-                                active_db = conn.client.schema("prd").table(TABLE_ROSTERS).select("id, player_id, is_captain, players(name)").eq("manager_id", m_id).is_("valid_to", "null").execute().data
+                                active_db = conn.client.schema(SCHEMA).table(TABLE_ROSTERS).select("id, player_id, is_captain, players(name)").eq("manager_id", m_id).is_("valid_to", "null").execute().data
                                 active_map = {r['players']['name']: {'is_cap': r['is_captain'], 'id': r['id']} for r in active_db}
                                 
                                 to_sunset = [data['id'] for p_n, data in active_map.items() if p_n not in st.session_state.roster or (p_n in new_caps) != data['is_cap']]
                                 to_insert = [p_n for p_n in st.session_state.roster if p_n not in active_map or (p_n in new_caps) != active_map[p_n]['is_cap']]
                                 
                                 if to_sunset:
-                                    conn.client.schema("prd").table(TABLE_ROSTERS).update({"valid_to": now_ts}).in_("id", to_sunset).execute()
+                                    conn.client.schema(SCHEMA).table(TABLE_ROSTERS).update({"valid_to": now_ts}).in_("id", to_sunset).execute()
                                 if to_insert:
                                     ins_rows = []
                                     for p_n in to_insert:
@@ -627,10 +629,10 @@ def show_main_interface(is_live):
                                             "manager_id": m_id, "player_id": p_i['id'], "division": p_i['division'],
                                             "is_captain": (p_n in new_caps), "valid_from": now_ts, "acquired_at": now_ts
                                         })
-                                    conn.client.schema("prd").table(TABLE_ROSTERS).insert(ins_rows).execute()
+                                    conn.client.schema(SCHEMA).table(TABLE_ROSTERS).insert(ins_rows).execute()
                                 
                                 # 2. Update Manager Table (Increment)
-                                conn.client.schema("prd").table(TABLE_MANAGERS).update({
+                                conn.client.schema(SCHEMA).table(TABLE_MANAGERS).update({
                                     "transfers_used": limit_p, 
                                     "captain_changes_used": limit_c
                                 }).eq("id", m_id).execute()
