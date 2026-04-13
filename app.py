@@ -86,63 +86,65 @@ def show_ratings_phase():
 
     st.info("💡 **Tip:** Start typing your name in the box below to find it quickly.")
 
-    with st.form("ranking_form", clear_on_submit=True):
-        target_name = st.selectbox(
-            "Find your name:", 
-            options=sorted(list(name_to_id.keys())),
-            index=None,
-            placeholder="Type your name here...",
-            help="Search for your name as it appeared on the signup sheet."
-        )
-        
-        st.write("---")
-        st.write("### Rate your skills (1-10)")
-        st.caption("""
-            These ratings will determine your draft price.
-            * A 10 indicates you are the best in South Africa for that category.
-            * A 5 indicates you are an average player in South Africa for that category.
-            * A 1 indicates you are a complete rookie in South Africa for that category.
-                   """)
-        t = st.slider("Throwing", 1, 10, 1, key="rank_throwing")
-        i = st.slider("Game IQ", 1, 10, 1, key="rank_game_iq")
-        a = st.slider("Athleticism", 1, 10, 1, key="rank_athleticism")
+    target_name = st.selectbox(
+        "Find your name:",
+        options=sorted(list(name_to_id.keys())),
+        index=None,
+        placeholder="Type your name here...",
+        help="Search for your name as it appeared on the signup sheet.",
+        key="rank_target_name"
+    )
 
-        st.write("### Estimate your game averages")
-        a_a = st.slider("Average Assists per Game", 0, 7, 0, key="rank_avg_assists")
-        a_g = st.slider("Average Goals per Game", 0, 7, 0, key="rank_avg_goals")
-            
-        st.write("---")
-        st.write("### Your Submission Summary")
-        s1, s2, s3, s4, s5 = st.columns(5)
-        s1.metric("Throwing", t)
-        s2.metric("Game IQ", i)
-        s3.metric("Athleticism", a)
-        s4.metric("Avg Assists", a_a)
-        s5.metric("Avg Goals", a_g)
-        st.write("---")
-        st.warning("Only submit a ranking for yourself! If you do not find your name. Please contact the admin.")
-        
-        if st.form_submit_button("Submit My Ranking", use_container_width=True):
-            if not target_name:
-                st.error("❌ Please select your name from the search box.")
-            else:
-                try:
-                    player_uuid = name_to_id[target_name]
-                    res = conn.client.schema(SCHEMA).table(TABLE_PLAYERS).update({
-                        "throwing": t, "avg_goals": a_g, "athleticism": a,
-                        "avg_assists": a_a, "game_iq": i,
-                        "has_submitted_rank": True
-                    }).eq("id", player_uuid).execute()
-                    if len(res.data) > 0:
-                        st.balloons()
-                        st.success(f"🔥 Thank you, {target_name}! Your rankings are locked in.")
-                        st.cache_data.clear()
-                        time.sleep(5)
-                        st.rerun()
-                    else:
-                        st.error("⚠️ The update ran but affected 0 rows. Please contact the admin.")
-                except Exception as e:
-                    st.error(f"Error: {e}")
+    st.write("---")
+    st.write("### Rate your skills (1-10)")
+    st.caption("""
+        These ratings will determine your draft price.
+        * A 10 indicates you are the best in South Africa for that category.
+        * A 5 indicates you are an average player in South Africa for that category.
+        * A 1 indicates you are a complete rookie in South Africa for that category.
+               """)
+    t = st.slider("Throwing", 1, 10, 1, key="rank_throwing")
+    i = st.slider("Game IQ", 1, 10, 1, key="rank_game_iq")
+    a = st.slider("Athleticism", 1, 10, 1, key="rank_athleticism")
+
+    st.write("### Estimate your game averages")
+    a_a = st.slider("Average Assists per Game", 0, 7, 0, key="rank_avg_assists")
+    a_g = st.slider("Average Goals per Game", 0, 7, 0, key="rank_avg_goals")
+
+    st.write("---")
+    st.write("### Your Submission Summary")
+    s1, s2, s3, s4, s5 = st.columns(5)
+    s1.metric("Throwing", t)
+    s2.metric("Game IQ", i)
+    s3.metric("Athleticism", a)
+    s4.metric("Avg Assists", a_a)
+    s5.metric("Avg Goals", a_g)
+    st.write("---")
+    st.warning("Only submit a ranking for yourself! If you do not find your name. Please contact the admin.")
+
+    if st.button("Submit My Ranking", use_container_width=True):
+        if not target_name:
+            st.error("❌ Please select your name from the search box.")
+        else:
+            try:
+                player_uuid = name_to_id[target_name]
+                res = conn.client.schema(SCHEMA).table(TABLE_PLAYERS).update({
+                    "throwing": t, "avg_goals": a_g, "athleticism": a,
+                    "avg_assists": a_a, "game_iq": i,
+                    "has_submitted_rank": True
+                }).eq("id", player_uuid).execute()
+                if len(res.data) > 0:
+                    for key in ["rank_target_name", "rank_throwing", "rank_game_iq", "rank_athleticism", "rank_avg_assists", "rank_avg_goals"]:
+                        if key in st.session_state:
+                            del st.session_state[key]
+                    st.balloons()
+                    st.success(f"🔥 Thank you, {target_name}! Your rankings are locked in.")
+                    st.cache_data.clear()
+                    st.rerun()
+                else:
+                    st.error("⚠️ The update ran but affected 0 rows. Please contact the admin.")
+            except Exception as e:
+                st.error(f"Error: {e}")
 
 # -- 6. Leaderberboard ---
 def get_processed_results(conn):
