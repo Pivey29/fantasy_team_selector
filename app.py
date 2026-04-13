@@ -61,6 +61,7 @@ if 'db_caps' not in st.session_state: st.session_state.db_caps = set()
 if 'update_success' not in st.session_state: st.session_state.update_success = False
 if 'manager_id' not in st.session_state: st.session_state.manager_id = None
 if 'auth_key' not in st.session_state: st.session_state.auth_key = None
+if 'rank_form_v' not in st.session_state: st.session_state.rank_form_v = 0
 
 # Global Data Load
 df_players = load_player_data()
@@ -76,23 +77,24 @@ def show_ratings_phase():
     total_players = len(df_players)
     ranked_count = total_players - len(unranked_df)
     name_to_id = {row['name']: row['id'] for _, row in unranked_df.iterrows()}
-    
+
     progress = ranked_count / total_players if total_players > 0 else 0
     st.progress(progress, text=f"📊 {ranked_count}/{total_players} players have submitted rankings")
-    
+
     if unranked_df.empty:
         st.success("✅ All players have submitted! The draft will open soon.")
         return
 
     st.info("💡 **Tip:** Start typing your name in the box below to find it quickly.")
 
+    v = st.session_state.rank_form_v
     target_name = st.selectbox(
         "Find your name:",
         options=sorted(list(name_to_id.keys())),
         index=None,
         placeholder="Type your name here...",
         help="Search for your name as it appeared on the signup sheet.",
-        key="rank_target_name"
+        key=f"rank_target_name_{v}"
     )
 
     st.write("---")
@@ -103,13 +105,13 @@ def show_ratings_phase():
         * A 5 indicates you are an average player in South Africa for that category.
         * A 1 indicates you are a complete rookie in South Africa for that category.
                """)
-    t = st.slider("Throwing", 1, 10, 1, key="rank_throwing")
-    i = st.slider("Game IQ", 1, 10, 1, key="rank_game_iq")
-    a = st.slider("Athleticism", 1, 10, 1, key="rank_athleticism")
+    t = st.slider("Throwing", 1, 10, 1, key=f"rank_throwing_{v}")
+    i = st.slider("Game IQ", 1, 10, 1, key=f"rank_game_iq_{v}")
+    a = st.slider("Athleticism", 1, 10, 1, key=f"rank_athleticism_{v}")
 
     st.write("### Estimate your game averages")
-    a_a = st.slider("Average Assists per Game", 0, 7, 0, key="rank_avg_assists")
-    a_g = st.slider("Average Goals per Game", 0, 7, 0, key="rank_avg_goals")
+    a_a = st.slider("Average Assists per Game", 0, 7, 0, key=f"rank_avg_assists_{v}")
+    a_g = st.slider("Average Goals per Game", 0, 7, 0, key=f"rank_avg_goals_{v}")
 
     st.write("---")
     st.write("### Your Submission Summary")
@@ -134,12 +136,11 @@ def show_ratings_phase():
                     "has_submitted_rank": True
                 }).eq("id", player_uuid).execute()
                 if len(res.data) > 0:
-                    for key in ["rank_target_name", "rank_throwing", "rank_game_iq", "rank_athleticism", "rank_avg_assists", "rank_avg_goals"]:
-                        if key in st.session_state:
-                            del st.session_state[key]
+                    st.session_state.rank_form_v += 1
                     st.balloons()
                     st.success(f"🔥 Thank you, {target_name}! Your rankings are locked in.")
                     st.cache_data.clear()
+                    time.sleep(2)
                     st.rerun()
                 else:
                     st.error("⚠️ The update ran but affected 0 rows. Please contact the admin.")
