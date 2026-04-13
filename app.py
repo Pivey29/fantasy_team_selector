@@ -137,6 +137,7 @@ def show_ratings_phase():
                         st.balloons()
                         st.success(f"🔥 Thank you, {target_name}! Your rankings are locked in.")
                         st.cache_data.clear()
+                        time.sleep(5)
                         st.rerun()
                     else:
                         st.error("⚠️ The update ran but affected 0 rows. Please contact the admin.")
