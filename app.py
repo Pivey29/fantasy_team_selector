@@ -225,8 +225,8 @@ def show_main_interface(is_live):
         else:
             # 2. DRAFT MODE: Allow typing for new registrations (Option B logic)
             manager_name = st.text_input(
-                "Manager Name:", 
-                placeholder="Type name to login or register...",
+                "Manager/Team Name:", 
+                placeholder="Enter existing/new name to login or register...",
                 key="mgr_name_persistent"
             ).strip()
             
