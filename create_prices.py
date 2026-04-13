@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from st_supabase_connection import SupabaseConnection
 import streamlit as st
-from config import TABLE_PLAYERS, MEAN, STD_DEV, DIV_OPEN_LABEL, DIV_WOMEN_LABEL
+from config import TABLE_PLAYERS, MEAN, STD_DEV, DIV_OPEN_LABEL, DIV_WOMEN_LABEL, SCHEMA
 
 # connect to DB
 conn = st.connection("supabase", type=SupabaseConnection)
@@ -25,7 +25,7 @@ def calculate_bell_prices(sub_df):
 
 def calculate_pricing():
     # fetch all players who have submitted rankings
-    res = (conn.client.schema("prd")
+    res = (conn.client.schema(SCHEMA)
            .table(TABLE_PLAYERS)
            .select("*")
            .eq("has_submitted_rank", True)
@@ -37,7 +37,7 @@ def calculate_pricing():
         return
 
     # 3. Calculate "total" first (Sum of the 5 skill columns)
-    skill_cols = ["throwing", "catching", "athleticism", "defense", "game_iq"]
+    skill_cols = ["throwing", "avg_assists", "athleticism", "avg_goals", "game_iq"]
     df["total"] = df[skill_cols].sum(axis=1)
 
     # 4. Apply your Bell Curve Logic per Division
@@ -50,7 +50,7 @@ def calculate_pricing():
     # 5. Push Updates to Supabase
     print(f"Updating {len(final_df)} player prices in Database...")
     for _, row in final_df.iterrows():
-        conn.client.schema("prd").table(TABLE_PLAYERS).update({
+        conn.client.schema(SCHEMA).table(TABLE_PLAYERS).update({
             "total": int(row["total"]),
             "price": int(row["price"])
         }).eq("id", row["id"]).execute()
