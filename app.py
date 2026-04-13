@@ -72,7 +72,7 @@ all_manager_names = [m['manager_name'] for m in mgr_query.data]
 # --- 5. PHASE: RATINGS ---
 def show_ratings_phase():
     st.title("⭐ Player Self-Ranking Portal")
-    unranked_df = df_players[df_players['has_submitted_rank'] == False]
+    unranked_df = df_players[~df_players['has_submitted_rank'].fillna(False).astype(bool)]
     total_players = len(df_players)
     ranked_count = total_players - len(unranked_df)
     name_to_id = {row['name']: row['id'] for _, row in unranked_df.iterrows()}
@@ -103,14 +103,22 @@ def show_ratings_phase():
             * A 5 indicates you are an average player in South Africa for that category.
             * A 1 indicates you are a complete rookie in South Africa for that category.
                    """)
-        t = st.slider("Throwing", 1, 10, 1)
-        i = st.slider("Game IQ", 1, 10, 1)
-        a = st.slider("Athleticism", 1, 10, 1)
+        t = st.slider("Throwing", 1, 10, 1, key="rank_throwing")
+        i = st.slider("Game IQ", 1, 10, 1, key="rank_game_iq")
+        a = st.slider("Athleticism", 1, 10, 1, key="rank_athleticism")
 
-        st.write("### Estimate your game averages")      
-        a_a = st.slider("Average Assists per Game", 0, 7, 0)
-        a_g = st.slider("Average Goals per Game", 0, 7, 0)
+        st.write("### Estimate your game averages")
+        a_a = st.slider("Average Assists per Game", 0, 7, 0, key="rank_avg_assists")
+        a_g = st.slider("Average Goals per Game", 0, 7, 0, key="rank_avg_goals")
             
+        st.write("---")
+        st.write("### Your Submission Summary")
+        s1, s2, s3, s4, s5 = st.columns(5)
+        s1.metric("Throwing", t)
+        s2.metric("Game IQ", i)
+        s3.metric("Athleticism", a)
+        s4.metric("Avg Assists", a_a)
+        s5.metric("Avg Goals", a_g)
         st.write("---")
         st.warning("Only submit a ranking for yourself! If you do not find your name. Please contact the admin.")
         
@@ -128,8 +136,7 @@ def show_ratings_phase():
                     if len(res.data) > 0:
                         st.balloons()
                         st.success(f"🔥 Thank you, {target_name}! Your rankings are locked in.")
-                        st.cache_data.clear() 
-                        time.sleep(5)
+                        st.cache_data.clear()
                         st.rerun()
                     else:
                         st.error("⚠️ The update ran but affected 0 rows. Please contact the admin.")
