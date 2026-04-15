@@ -73,8 +73,12 @@ if 'rank_form_v' not in st.session_state: st.session_state.rank_form_v = 0
 df_players = load_player_data()
 STAGE = get_current_stage()
 # --- FETCH MANAGERS FOR DROPDOWN ---
-mgr_query = conn.client.schema(SCHEMA).table(TABLE_MANAGERS).select("manager_name").execute()
-all_manager_names = [m['manager_name'] for m in mgr_query.data]
+@st.cache_data(ttl=60)
+def load_manager_names():
+    res = conn.client.schema(SCHEMA).table(TABLE_MANAGERS).select("manager_name").execute()
+    return [m['manager_name'] for m in res.data]
+
+all_manager_names = load_manager_names()
 
 # --- 5. PHASE: RATINGS ---
 def show_ratings_phase():
@@ -289,7 +293,7 @@ def show_main_interface(is_live):
             st.subheader("📊 Financials")
             total_spent = final_df['price'].sum()
             st.metric("Total Value", f"{total_spent} units")
-            st.metric("Remaining Budget", f"{BUDGET_LIMIT - total_spent} units")
+            st.metric("Remaining Budget", f"{round(BUDGET_LIMIT - total_spent, 1)} units")
             
         st.divider()
         
@@ -438,7 +442,7 @@ def show_main_interface(is_live):
 
     # --- 8. CALCULATIONS ---
     current_roster_df = df_players[df_players['name'].isin(st.session_state.roster)]
-    total_spent = current_roster_df['price'].sum()
+    total_spent = round(current_roster_df['price'].sum(), 1)
     remaining_budget = round(BUDGET_LIMIT - total_spent, 1)
     count_open = len(current_roster_df[current_roster_df['division'] == DIV_OPEN_LABEL])
     count_women = len(current_roster_df[current_roster_df['division'] == DIV_WOMEN_LABEL])
@@ -599,6 +603,7 @@ def show_main_interface(is_live):
                         
                         conn.client.schema(SCHEMA).table(TABLE_ROSTERS).insert(rows).execute()
                         
+                        load_manager_names.clear()
                         st.session_state.submitted = True
                         st.balloons()
                         st.rerun()
