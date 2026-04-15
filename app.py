@@ -233,46 +233,62 @@ def show_main_interface(is_live):
         st.balloons(); st.success("✅ Team updated successfully!")
         st.session_state['update_success'] = False
 
-    col_l1, col_l2 = st.columns(2)
+    # Use confirmed_mgr_name as the single "logged in" signal for both new and existing managers
+    already_confirmed = bool(st.session_state.get('confirmed_mgr_name'))
 
-    with col_l1:
-        if is_live:
-            # 1. LIVE MODE: Strict list of existing managers only
-            manager_name = st.selectbox(
-                "Select Your Manager Name:", 
-                options=all_manager_names, 
-                index=None, 
-                placeholder="Choose your name...",
-                key="mgr_name_select"
-            )
-            pin_label = "🔓 Enter PIN:"
-        else:
-            # 2. DRAFT MODE: Allow typing for new registrations (Option B logic)
-            manager_name = st.text_input(
-                "Manager/Team Name:", 
-                placeholder="Enter existing/new name to login or register...",
-                key="mgr_name_persistent"
-            ).strip()
-            
-            is_existing = manager_name in all_manager_names
-            if manager_name == "":
-                # st.caption("👋 Enter your name to begin.")
-                pin_label = "4-digit PIN:"
-            elif is_existing:
-                st.caption(f"✅ Found existing manager: **{manager_name}**")
+    if not already_confirmed:
+        col_l1, col_l2 = st.columns(2)
+
+        with col_l1:
+            if is_live:
+                # 1. LIVE MODE: Strict list of existing managers only
+                manager_name = st.selectbox(
+                    "Select Your Manager Name:",
+                    options=all_manager_names,
+                    index=None,
+                    placeholder="Choose your name...",
+                    key="mgr_name_select"
+                )
                 pin_label = "🔓 Enter PIN:"
             else:
-                st.caption(f"✨ New Manager detected! Choose a 4-digit PIN.")
-                pin_label = "🛡️ Create PIN:"
+                # 2. DRAFT MODE: Allow typing for new registrations
+                manager_name = st.text_input(
+                    "Manager/Team Name:",
+                    placeholder="Enter existing/new name to login or register...",
+                    key="mgr_name_persistent"
+                ).strip()
 
-    with col_l2:
-        # The PIN box now uses the dynamic label from the logic above
-        manager_pin = st.text_input(
-            pin_label, 
-            key="mgr_pin_persistent", 
-            type="password", 
-            max_chars=PIN_LENGTH
-        )
+                is_existing = manager_name in all_manager_names
+                if manager_name == "":
+                    pin_label = "4-digit PIN:"
+                elif is_existing:
+                    st.caption(f"✅ Found existing manager: **{manager_name}**")
+                    pin_label = "🔓 Enter PIN:"
+                else:
+                    st.caption(f"✨ New Manager detected! Choose a 4-digit PIN.")
+                    pin_label = "🛡️ Create PIN:"
+
+        with col_l2:
+            manager_pin = st.text_input(
+                pin_label,
+                key="mgr_pin_persistent",
+                type="password",
+                max_chars=PIN_LENGTH
+            )
+
+        # New manager in draft mode: show a button to proceed (no DB auth needed yet)
+        if not is_live and manager_name and len(manager_pin) == PIN_LENGTH and manager_name not in all_manager_names:
+            if st.button("🚀 Start Drafting", type="primary", use_container_width=True):
+                st.session_state.confirmed_mgr_name = manager_name
+                st.session_state.confirmed_mgr_pin = manager_pin
+                st.rerun()
+            st.stop()
+
+        if not manager_name or len(manager_pin) < PIN_LENGTH:
+            st.stop()
+    else:
+        manager_name = st.session_state.confirmed_mgr_name
+        manager_pin = st.session_state.confirmed_mgr_pin
 
     if st.session_state.submitted:
 
@@ -323,9 +339,6 @@ def show_main_interface(is_live):
                 st.rerun()
             
         st.stop()
-      
-    if not manager_name or len(manager_pin) < PIN_LENGTH:
-        st.stop()
 
     # Authentication Logic
     auth_key = f"{manager_name}:{manager_pin}"
@@ -336,6 +349,8 @@ def show_main_interface(is_live):
             st.session_state.manager_id = auth_res.data[0]['id']
             st.session_state.confirmed_mgr_name = manager_name
             st.session_state.confirmed_mgr_pin = manager_pin
+            st.session_state.auth_key = auth_key
+            st.rerun()
         else:
             st.session_state.manager_id = None
             if not is_live and st.session_state.get(f"name_exists_{manager_name}"):
@@ -376,25 +391,28 @@ def show_main_interface(is_live):
             st.rerun()
 
     # --- 7. PHASE: DRAFT & LIVE ---
-    if m_id:
-        l_col1, l_col2 = st.columns([3, 1])
-        with l_col1:
+    # Show banner + logout for ALL confirmed users (new and existing managers)
+    l_col1, l_col2 = st.columns([3, 1])
+    with l_col1:
+        if m_id:
             st.success(f"✅ Authenticated: {manager_name}")
-        with l_col2:
-            if st.button("🚪 Logout", use_container_width=True):
-                # Wipe all user-specific data from the browser's memory
-                keys_to_reset = [
-                    'manager_id', 'auth_user', 'roster', 'db_names', 
-                    'db_caps', 'submitted', 'edit_mode', 'auth_key',
-                    'confirmed_mgr_name', 'confirmed_mgr_pin'
-                ]
-                for key in keys_to_reset:
-                    if key in st.session_state:
-                        del st.session_state[key]
-                
-                st.cache_data.clear()
-                st.rerun()
-                st.stop()
+        else:
+            st.info(f"👋 Drafting as: **{manager_name}** (New Manager)")
+    with l_col2:
+        if st.button("🚪 Logout", use_container_width=True):
+            keys_to_reset = [
+                'manager_id', 'auth_user', 'roster', 'db_names',
+                'db_caps', 'submitted', 'edit_mode', 'auth_key',
+                'confirmed_mgr_name', 'confirmed_mgr_pin',
+                'mgr_name_persistent', 'mgr_pin_persistent', 'mgr_name_select'
+            ]
+            for key in keys_to_reset:
+                if key in st.session_state:
+                    del st.session_state[key]
+            st.cache_data.clear()
+            st.rerun()
+
+    if m_id:
         
         # 1. Show Transfer Rules ONLY if Live
         if st.session_state.get('manager_id'):
