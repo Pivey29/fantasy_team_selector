@@ -25,6 +25,7 @@ from config import (
     TABLE_ROSTERS,
     TABLE_SCORES,
     SCHEMA,
+    DRAFT_END_DT,
     get_current_stage
 )
 
@@ -266,7 +267,7 @@ def show_main_interface(is_live):
                     pin_label = "🔓 Enter PIN:"
                 else:
                     st.caption(f"✨ New Manager detected! Choose a 4-digit PIN.")
-                    pin_label = "🛡️ Create PIN:"
+                    pin_label = "🛡️ Create 4-digit PIN:"
 
         with col_l2:
             manager_pin = st.text_input(
@@ -500,11 +501,12 @@ def show_main_interface(is_live):
             * Min **{MIN_GENDER_SIZE}** per division
             * Max **{MAX_TEAM_SIZE}** per club
             * Select 1 captain per division
+            * Unlimited changes allowed until {DRAFT_END_DT} - just log back in to your profile to make the changes.
 
-            **Transfers:**
-            * 2 transfers and 2 captain switches allowed per day.
+            **In Tournament/Live Transfers:**
+            * 2 player transfers and 2 captain switches are allowed per day of the tournament (i.e. on Saturday & Sunday).
             * these changes will only come into effect the next day.
-            * points DO NOT count retrospectively for transfers.
+            * points DO NOT count retrospectively for transfers/captain changes.
             
             **Scoring:**
             * 1 point per assist / goal
