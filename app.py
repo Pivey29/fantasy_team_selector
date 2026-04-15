@@ -159,7 +159,7 @@ def get_processed_results(conn):
         ).is_("valid_to", "null").execute()
         
         # Pull Scores
-        score_res = conn.client.schema(SCHEMA).table(TABLE_SCORES).select("player_id, points_earned").execute()
+        score_res = conn.client.schema(SCHEMA).table(TABLE_SCORES).select("player_id, points_earned").gt("price", 0).execute()
         
         if not roster_res.data:
             return pd.DataFrame(), pd.DataFrame()
@@ -430,7 +430,7 @@ def show_main_interface(is_live):
     # --- 8. CALCULATIONS ---
     current_roster_df = df_players[df_players['name'].isin(st.session_state.roster)]
     total_spent = current_roster_df['price'].sum()
-    remaining_budget = BUDGET_LIMIT - total_spent
+    remaining_budget = round(BUDGET_LIMIT - total_spent, 1)
     count_open = len(current_roster_df[current_roster_df['division'] == DIV_OPEN_LABEL])
     count_women = len(current_roster_df[current_roster_df['division'] == DIV_WOMEN_LABEL])
     team_counts = current_roster_df['team'].value_counts().to_dict()
