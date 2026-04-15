@@ -7,7 +7,7 @@ from datetime import datetime
 TOURNAMENT_NAME = "OW Nationals 2026 - Fantasy Draft"
 DIV_OPEN_LABEL = "opens"
 DIV_WOMEN_LABEL = "womens"
-SCHEMA = "prd"
+SCHEMA = "dev"
 ROSTER_SIZE= 10
 BUDGET_LIMIT = 100
 MAX_GENDER_SIZE = 5
@@ -24,8 +24,8 @@ TABLE_MANAGERS = "managers"
 TABLE_ROSTERS  = "rosters"
 
 # Pricing
-MEAN = 12
-STD_DEV = 7
+MEAN = 11
+STD_DEV = 6
 
 # --- TIMEZONE & CALCULATIONS ---
 SAST = pytz.timezone('Africa/Johannesburg')
@@ -40,7 +40,7 @@ TOURNAMENT_START_DT = datetime(2026, 4, 13, 8, 0, tzinfo=SAST) # Morning of Day 
 
 # --- 3. STAGE AUTOMATION ---
 # Set to "RATINGS", "DRAFT", "LIVE" to override, or None for Auto-mode
-MANUAL_STAGE = "RATINGS" 
+MANUAL_STAGE = "DRAFT" 
 
 def get_current_stage():
     if MANUAL_STAGE:
