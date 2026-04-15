@@ -37,7 +37,13 @@ conn = st.connection("supabase", type=SupabaseConnection)
 @st.cache_data(ttl=300)
 def load_player_data():
     try:
-        response = conn.client.schema(SCHEMA).table(TABLE_PLAYERS).select("*").execute()
+        response = (conn.client
+                    .schema(SCHEMA)
+                    .table(TABLE_PLAYERS)
+                    .select("*")
+                    .not_.is_("price", "null")
+                    .gt("price", 0)
+                    .execute())
         df = pd.DataFrame(response.data)
         df.columns = df.columns.str.strip().str.lower()
         df['name'] = df['name'].str.strip()
@@ -159,7 +165,10 @@ def get_processed_results(conn):
         ).is_("valid_to", "null").execute()
         
         # Pull Scores
-        score_res = conn.client.schema(SCHEMA).table(TABLE_SCORES).select("player_id, points_earned").gt("price", 0).execute()
+        score_res = (conn.client.schema(SCHEMA)
+                     .table(TABLE_SCORES)
+                     .select("player_id, points_earned")
+                     )
         
         if not roster_res.data:
             return pd.DataFrame(), pd.DataFrame()
