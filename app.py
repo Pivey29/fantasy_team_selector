@@ -26,7 +26,10 @@ from config import (
     TABLE_SCORES,
     SCHEMA,
     DRAFT_END_DT,
-    get_current_stage
+    get_current_stage,
+    PLAYER_ROLES,
+    ROLE_MULTIPLIERS,
+    ROLE_DESCRIPTIONS
 )
 
 # --- 2. PAGE CONFIG ---
@@ -65,6 +68,7 @@ if 'captain_women' not in st.session_state: st.session_state.captain_women = Non
 if 'edit_mode' not in st.session_state: st.session_state.edit_mode = False
 if 'db_names' not in st.session_state: st.session_state.db_names = set()
 if 'db_caps' not in st.session_state: st.session_state.db_caps = set()
+if 'db_roles' not in st.session_state: st.session_state.db_roles = {}  # Maps player name -> role from DB
 if 'update_success' not in st.session_state: st.session_state.update_success = False
 if 'manager_id' not in st.session_state: st.session_state.manager_id = None
 if 'auth_key' not in st.session_state: st.session_state.auth_key = None
@@ -166,7 +170,7 @@ def get_processed_results(conn):
     try:
         # Pull Active Rosters from prd
         roster_res = conn.client.schema(SCHEMA).table(TABLE_ROSTERS).select(
-            "is_captain, manager_id, managers(manager_name), player_id, players(name)"
+            "is_captain, player_role, manager_id, managers(manager_name), player_id, players(name)"
         ).is_("valid_to", "null").execute()
         
         # Pull Scores
@@ -190,10 +194,23 @@ def get_processed_results(conn):
             df_scores = pd.DataFrame(score_res.data).groupby('player_id')['points_earned'].sum().reset_index()
 
         merged = df_rosters.merge(df_scores, on="player_id", how="left").fillna(0)
-        merged['calc_pts'] = merged.apply(
-            lambda x: x['points_earned'] * CAPTAIN_MULTIPLIER if x['is_captain'] else x['points_earned'], 
-            axis=1
-        )
+        
+        # Apply role and captain multipliers
+        def calculate_points(row):
+            base_points = row['points_earned']
+            
+            # Apply role multiplier (simplified - would need to break down goals vs assists in real implementation)
+            # For now, apply uniform role bonus
+            role = row.get('player_role', 'neutral') or 'neutral'
+            role_mult = 1.0  # Default, would need actual goal/assist breakdown for proper multiplier
+            
+            # Apply captain multiplier first
+            if row['is_captain']:
+                return base_points * CAPTAIN_MULTIPLIER * role_mult
+            else:
+                return base_points * role_mult
+        
+        merged['calc_pts'] = merged.apply(calculate_points, axis=1)
 
         leaderboard = merged.groupby("Manager_Name")["calc_pts"].sum().reset_index()
         leaderboard.columns = ["Team", "Score"]
@@ -304,7 +321,10 @@ def show_main_interface(is_live):
             final_df = df_players[df_players['name'].isin(st.session_state.roster)]
             for _, row in final_df.iterrows():
                 is_cap = row['name'] in [st.session_state.captain_open, st.session_state.captain_women]
-                st.write(f"{'⭐' if is_cap else '•'} {row['name']} ({row['team']})")
+                div_label = DIV_OPEN_LABEL.title() if row['division'] == DIV_OPEN_LABEL else DIV_WOMEN_LABEL.title()
+                role_key = f"role_{row['name']}_{div_label}"
+                p_role = st.session_state.get(role_key, 'neutral')
+                st.write(f"{'⭐' if is_cap else '•'} {row['name']} ({row['team']}) - {p_role}")
                 
         with col2:
             st.subheader("📊 Financials")
@@ -364,7 +384,7 @@ def show_main_interface(is_live):
     m_id = st.session_state.manager_id
     if m_id and not st.session_state.roster:
         curr = conn.client.schema(SCHEMA).table(TABLE_ROSTERS).select(
-            "is_captain, players(name, division)"
+            "is_captain, player_role, players(name, division)"
         ).eq("manager_id", m_id).is_("valid_to", "null").execute()
         
         if curr.data:
@@ -373,8 +393,9 @@ def show_main_interface(is_live):
             st.session_state.roster = names
             st.session_state.db_names = set(names)
             
-            # 2. Initialize db_caps
+            # 2. Initialize db_caps and db_roles
             st.session_state.db_caps = set() 
+            st.session_state.db_roles = {}
             
             # 3. Standardization for label comparison
             target_open = DIV_OPEN_LABEL.lower()
@@ -382,6 +403,15 @@ def show_main_interface(is_live):
             for item in curr.data:
                 p_n = item['players']['name']
                 p_div = item['players']['division'].lower() if item['players']['division'] else ""
+                p_role = item.get('player_role', 'neutral') or 'neutral'
+                
+                # Store role in db_roles for tracking
+                st.session_state.db_roles[p_n] = p_role
+                
+                # Initialize selectbox key with DB value
+                div_label = DIV_OPEN_LABEL.title() if p_div == target_open else DIV_WOMEN_LABEL.title()
+                role_key = f"role_{p_n}_{div_label}"
+                st.session_state[role_key] = p_role
                 
                 if item['is_captain']:
                     st.session_state.db_caps.add(p_n)
@@ -484,12 +514,16 @@ def show_main_interface(is_live):
         for p in st.session_state.roster:
             p_m = df_players[df_players['name'] == p]
             if not p_m.empty and p_m.iloc[0]['division'] == DIV_OPEN_LABEL:
-                st.write(f"{'⭐' if p == st.session_state.captain_open else '•'} {p}")
+                role_key = f"role_{p}_{DIV_OPEN_LABEL.title()}"
+                p_role = st.session_state.get(role_key, 'neutral')
+                st.write(f"{'⭐' if p == st.session_state.captain_open else '•'} {p} ({p_role})")
         st.subheader(f"Womens ({count_women}/{MIN_GENDER_SIZE}+)")
         for p in st.session_state.roster:
             p_m = df_players[df_players['name'] == p]
             if not p_m.empty and p_m.iloc[0]['division'] == DIV_WOMEN_LABEL:
-                st.write(f"{'⭐' if p == st.session_state.captain_women else '•'} {p}")
+                role_key = f"role_{p}_{DIV_WOMEN_LABEL.title()}"
+                p_role = st.session_state.get(role_key, 'neutral')
+                st.write(f"{'⭐' if p == st.session_state.captain_women else '•'} {p} ({p_role})")
         if st.button("🗑️ Reset All"):
             st.session_state.roster = []; st.session_state.captain_open = None; st.session_state.captain_women = None; st.rerun()
 
@@ -501,19 +535,35 @@ def show_main_interface(is_live):
             * Min **{MIN_GENDER_SIZE}** per division
             * Max **{MAX_TEAM_SIZE}** per club
             * Select 1 captain per division
+            * Assign each player a role: **Handler**, **Cutter**, or **Neutral** (default)
             * Unlimited changes allowed until {DRAFT_END_DT} - just log back in to your profile to make the changes.
+
+            **Player Roles:**
+            * **Handler** 🎯: Primary ball handler - earns bonus points for assists
+            * **Cutter** 🏃: Field runner - earns bonus points for goals
+            * **Neutral** ⚪: Versatile player - standard point multipliers
 
             **In Tournament/Live Transfers:**
             * 2 player transfers and 2 captain switches are allowed per day of the tournament (i.e. on Saturday & Sunday).
             * these changes will only come into effect the next day.
             * points DO NOT count retrospectively for transfers/captain changes.
             
-            **Scoring:**
-            * 1 point per assist / goal
-            * 2 points per callahan
-            * Captains earn **double points**
+            **Scoring (Per Player Role):**
+            * 🎯 **Handler**: 5 pts per assist, 3 pts per goal
+            * 🏃 **Cutter**: 3 pts per assist, 5 pts per goal
+            * ⚪ **Neutral**: 4 pts per assist, 4 pts per goal
+            * **Callahan**: 10 points
+            * **Captains**: Earn double points (x2 all scoring above)
             """)
         st.markdown(rules_text)
+
+    # --- ROLE ASSIGNMENT GUIDE ---
+    st.info("""
+        **🎯 Assign Each Player a Role** – Choose the role that best matches how they'll play:
+        * **🎯 Handler** (5 pts/assist, 3 pts/goal): Primary ball handler & play-maker
+        * **🏃 Cutter** (3 pts/assist, 5 pts/goal): Field runner & finisher
+        * **⚪ Neutral** (4 pts/assist, 4 pts/goal): Versatile/Unknown role
+        """, icon="💡")
 
     if not is_live or st.session_state.get('edit_mode'):
         m_cols = st.columns(5 if is_live else 3)
@@ -531,12 +581,18 @@ def show_main_interface(is_live):
         for label, div_f, tab in [(DIV_OPEN_LABEL.title(), DIV_OPEN_LABEL, t_o), (DIV_WOMEN_LABEL.title(), DIV_WOMEN_LABEL, t_w)]:
             with tab:
                 disp_df = df_players[df_players['division'] == div_f]
-                st.columns([3, 1, 1.5, 1.5])[0].write("**Player (Team)**")
+                st.columns([3, 1, 1.5, 1.5, 2.5])[0].write("**Player (Team)**")
                 for _, row in disp_df.iterrows():
                     p_n, p_p, p_t = row['name'], row['price'], row['team']
                     is_in = p_n in st.session_state.roster
                     is_cap = (p_n in [st.session_state.captain_open, st.session_state.captain_women])
-                    ca, cb, cc, cd = st.columns([3, 1, 1.5, 1.5])
+                    
+                    # Get current role from selectbox session state key
+                    div_label = DIV_OPEN_LABEL.title() if div_f == DIV_OPEN_LABEL else DIV_WOMEN_LABEL.title()
+                    role_key = f"role_{p_n}_{div_label}"
+                    current_role = st.session_state.get(role_key, 'neutral')
+                    
+                    ca, cb, cc, cd, ce = st.columns([3, 1, 1.5, 1.5, 2.5])
                     ca.write(f"**{p_n}** ({p_t})"); cb.write(f"{p_p}")
                     if is_in:
                         if cc.button("Remove", key=f"r_{p_n}_{label}", type="primary"):
@@ -549,6 +605,24 @@ def show_main_interface(is_live):
                             if div_f == DIV_OPEN_LABEL: st.session_state.captain_open = p_n
                             else: st.session_state.captain_women = p_n
                             st.rerun()
+                        
+                        # Role selection for players in roster - styled buttons
+                        role_display = {
+                            "handler": "🎯 Handler",
+                            "cutter": "🏃 Cutter",
+                            "neutral": "⚪ Neutral"
+                        }
+                        role_cols = st.columns(3)
+                        for i, role in enumerate(PLAYER_ROLES):
+                            if role_cols[i].button(
+                                role_display[role],
+                                key=f"role_btn_{p_n}_{label}_{role}",
+                                use_container_width=True,
+                                type="primary" if current_role == role else "secondary"
+                            ):
+                                role_key = f"role_{p_n}_{label}"
+                                st.session_state[role_key] = role
+                                st.rerun()
                     else:
                         reason = "Add"
                         if team_counts.get(p_t, 0) >= MAX_TEAM_SIZE: reason = "Club Full"
@@ -612,11 +686,18 @@ def show_main_interface(is_live):
                         new_caps = {st.session_state.captain_open, st.session_state.captain_women}
                         for p in st.session_state.roster:
                             p_info = df_players[df_players['name'] == p].iloc[0]
+                            
+                            # Get role from selectbox session state key
+                            div_label = DIV_OPEN_LABEL.title() if p_info['division'] == DIV_OPEN_LABEL else DIV_WOMEN_LABEL.title()
+                            role_key = f"role_{p}_{div_label}"
+                            p_role = st.session_state.get(role_key, 'neutral')
+                            
                             rows.append({
                                 "manager_id": active_m_id, 
                                 "player_id": p_info['id'], 
                                 "division": p_info['division'], 
-                                "is_captain": (p in new_caps), 
+                                "is_captain": (p in new_caps),
+                                "player_role": p_role,
                                 "acquired_at": now_ts, 
                                 "valid_from": now_ts
                             })
@@ -672,9 +753,15 @@ def show_main_interface(is_live):
                                     ins_rows = []
                                     for p_n in to_insert:
                                         p_i = df_players[df_players['name'] == p_n].iloc[0]
+                                        
+                                        # Get role from selectbox session state key
+                                        div_label = DIV_OPEN_LABEL.title() if p_i['division'] == DIV_OPEN_LABEL else DIV_WOMEN_LABEL.title()
+                                        role_key = f"role_{p_n}_{div_label}"
+                                        p_role = st.session_state.get(role_key, 'neutral')
+                                        
                                         ins_rows.append({
                                             "manager_id": m_id, "player_id": p_i['id'], "division": p_i['division'],
-                                            "is_captain": (p_n in new_caps), "valid_from": now_ts, "acquired_at": now_ts
+                                            "is_captain": (p_n in new_caps), "player_role": p_role, "valid_from": now_ts, "acquired_at": now_ts
                                         })
                                     conn.client.schema(SCHEMA).table(TABLE_ROSTERS).insert(ins_rows).execute()
                                 

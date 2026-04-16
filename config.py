@@ -14,6 +14,20 @@ MAX_GENDER_SIZE = 5
 MIN_GENDER_SIZE = 5
 MAX_TEAM_SIZE = 2
 CAPTAIN_MULTIPLIER = 2
+
+# --- PLAYER ROLES & SCORING ---
+PLAYER_ROLES = ["handler", "cutter", "neutral"]
+ROLE_DESCRIPTIONS = {
+    "handler": "🎯 Handler - Sets up plays (5 pts/assist, 3 pts/goal)",
+    "cutter": "🏃 Cutter - Field runner (3 pts/assist, 5 pts/goal)",
+    "neutral": "⚪ Neutral - Versatile (4 pts/assist, 4 pts/goal)"
+}
+ROLE_MULTIPLIERS = {
+    "handler": {"assists": 5, "goals": 3},  # Handlers get bonus for assists
+    "cutter": {"assists": 3, "goals": 5},   # Cutters get bonus for goals  
+    "neutral": {"assists": 4, "goals": 4}   # Neutral gets standard points
+}
+
 PIN_LENGTH = 4
 MAX_PLAYER_TRANSFERS = 2
 MAX_CAPTAIN_CHANGES = 2
