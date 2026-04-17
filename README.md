@@ -1,13 +1,13 @@
-# 🏆 2026 Fantasy Regionals Draft
+# 🏆 Fantasy Draft
 
-A Streamlit-based fantasy sports engine that allows users to draft a 9-player squad within strict budget and roster constraints. Submissions are synced in real-time to Google Sheets.
+A Streamlit-based fantasy sports engine that allows users to draft a n-player squad within strict budget and roster constraints. Submissions are synced in real-time to Google Sheets.
 
 ## 📋 Draft Rules
-- **Total Players:** 9
-- **Budget:** 100 Units
-- **Gender Balance:** Min 4 Opens / 4 Womens
-- **Club Limit:** Max 2 players from the same team
-- **Captains:** 1 designated Captain per division (Double Points)
+- **Total Players:** n
+- **Budget:** X Units
+- **Gender Balance:** Min y Opens / y Womens
+- **Club Limit:** Max p players from the same team
+- **Captains:** c designated Captain per division (Double Points)
 
 ## 🛠️ Setup & Installation
 
