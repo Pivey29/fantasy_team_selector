@@ -630,11 +630,11 @@ def show_main_interface(is_live):
                     ca, cb, cc, cd, ce = st.columns([3, 1, 1.5, 1.5, 2.5])
                     ca.write(f"**{p_n}** ({p_t})"); cb.write(f"{p_p}")
                     if is_in:
-                        if cc.button("Remove", key=f"r_{p_n}_{label}", type="primary"):
-                            st.session_state.roster.remove(p_n)
-                            if st.session_state.captain_open == p_n: st.session_state.captain_open = None
-                            if st.session_state.captain_women == p_n: st.session_state.captain_women = None
-                            st.rerun()
+                        def _do_remove(name=p_n):
+                            st.session_state.roster.remove(name)
+                            if st.session_state.captain_open == name: st.session_state.captain_open = None
+                            if st.session_state.captain_women == name: st.session_state.captain_women = None
+                        cc.button("Remove", key=f"r_{p_n}_{label}", type="primary", on_click=_do_remove)
                         if is_cap:
                             cd.markdown("🌟 **Captain**")
                         else:
