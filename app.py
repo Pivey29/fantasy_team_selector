@@ -334,7 +334,7 @@ def show_main_interface(is_live):
                 
         with col2:
             st.subheader("📊 Financials")
-            total_spent = final_df['price'].sum()
+            total_spent = round(final_df['price'].sum(), 1)
             st.metric("Total Value", f"{total_spent} units")
             st.metric("Remaining Budget", f"{round(BUDGET_LIMIT - total_spent, 1)} units")
             
