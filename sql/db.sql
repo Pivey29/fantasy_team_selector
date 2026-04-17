@@ -20,15 +20,17 @@ CREATE TABLE prd.players (
     has_submitted_rank BOOLEAN DEFAULT FALSE
 );
 
--- 2. Managers Table 
+-- 2. Managers Table
 CREATE TABLE prd.managers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     manager_name TEXT NOT NULL,
-    pin TEXT NOT NULL, 
+    team_name TEXT UNIQUE NOT NULL,
+    pin TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT now(),
     transfers_used INTEGER DEFAULT 0,
     captain_changes_used INTEGER DEFAULT 0
 );
+
 
 -- 3. Rosters Table 
 CREATE TABLE prd.rosters (
