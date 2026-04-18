@@ -204,7 +204,7 @@ def get_processed_results(conn):
             
             # Apply role multiplier (simplified - would need to break down goals vs assists in real implementation)
             # For now, apply uniform role bonus
-            role = row.get('player_role', 'neutral') or 'neutral'
+            role = row.get('player_role', 'hybrid') or 'hybrid'
             role_mult = 1.0  # Default, would need actual goal/assist breakdown for proper multiplier
             
             # Apply captain multiplier first
@@ -329,7 +329,7 @@ def show_main_interface(is_live):
                 is_cap = row['name'] in [st.session_state.captain_open, st.session_state.captain_women]
                 div_label = DIV_OPEN_LABEL.title() if row['division'] == DIV_OPEN_LABEL else DIV_WOMEN_LABEL.title()
                 role_key = f"role_{row['name']}_{div_label}"
-                p_role = st.session_state.get(role_key, 'neutral')
+                p_role = st.session_state.get(role_key, 'hybrid')
                 st.write(f"{'⭐' if is_cap else '•'} {row['name']} ({row['team']}) - {p_role}")
                 
         with col2:
@@ -411,7 +411,7 @@ def show_main_interface(is_live):
             for item in curr.data:
                 p_n = item['players']['name']
                 p_div = item['players']['division'].lower() if item['players']['division'] else ""
-                p_role = item.get('player_role', 'neutral') or 'neutral'
+                p_role = item.get('player_role', 'hybrid') or 'hybrid'
                 
                 # Store role in db_roles for tracking
                 st.session_state.db_roles[p_n] = p_role
@@ -524,8 +524,8 @@ def show_main_interface(is_live):
         if p_n in st.session_state.db_names
         and st.session_state.get(
             f"role_{p_n}_{DIV_OPEN_LABEL.title() if df_players[df_players['name'] == p_n].iloc[0]['division'] == DIV_OPEN_LABEL else DIV_WOMEN_LABEL.title()}",
-            'neutral'
-        ) != st.session_state.db_roles.get(p_n, 'neutral')
+            'hybrid'
+        ) != st.session_state.db_roles.get(p_n, 'hybrid')
     )
     live_cap_changes = len({st.session_state.captain_open, st.session_state.captain_women} - st.session_state.db_caps)
 
@@ -543,14 +543,14 @@ def show_main_interface(is_live):
             p_m = df_players[df_players['name'] == p]
             if not p_m.empty and p_m.iloc[0]['division'] == DIV_OPEN_LABEL:
                 role_key = f"role_{p}_{DIV_OPEN_LABEL.title()}"
-                p_role = st.session_state.get(role_key, 'neutral')
+                p_role = st.session_state.get(role_key, 'hybrid')
                 st.write(f"{'⭐' if p == st.session_state.captain_open else '•'} {p} ({p_role})")
         st.subheader(f"Womens ({count_women}/{MIN_GENDER_SIZE})")
         for p in st.session_state.roster:
             p_m = df_players[df_players['name'] == p]
             if not p_m.empty and p_m.iloc[0]['division'] == DIV_WOMEN_LABEL:
                 role_key = f"role_{p}_{DIV_WOMEN_LABEL.title()}"
-                p_role = st.session_state.get(role_key, 'neutral')
+                p_role = st.session_state.get(role_key, 'hybrid')
                 st.write(f"{'⭐' if p == st.session_state.captain_women else '•'} {p} ({p_role})")
         if st.button("🗑️ Reset All"):
             st.session_state.roster = []; st.session_state.captain_open = None; st.session_state.captain_women = None; st.rerun()
@@ -563,13 +563,13 @@ def show_main_interface(is_live):
             * **{MIN_GENDER_SIZE}** per division
             * Max **{MAX_TEAM_SIZE}** per club
             * Select 1 captain per division
-            * Assign each player a role: **Handler**, **Cutter**, or **Neutral** (default)
+            * Assign each player a role: **Handler**, **Cutter**, or **Hybrid** (default)
             * Unlimited changes allowed until {DRAFT_END_DT} - just log back in to your profile to make the changes.
 
             **Player Roles:**
             * **Handler** 🎯: Primary ball handler - earns bonus points for assists
             * **Cutter** 🏃: Field runner - earns bonus points for goals
-            * **Neutral** ⚪: Versatile player - standard point multipliers
+            * **Hybrid** ⚪: Versatile player - standard point multipliers
 
             **In Tournament/Live Transfers:**
             * {MAX_PLAYER_TRANSFERS} player transfers and {MAX_CAPTAIN_CHANGES} captain transfers allowed throughout the tournament.
@@ -578,9 +578,9 @@ def show_main_interface(is_live):
             * points DO NOT count retrospectively for transfers/captain changes.
             
             **Scoring (Per Player Role):**
-            * 🎯 **Handler**: 5 pts per assist, 3 pts per goal
-            * 🏃 **Cutter**: 3 pts per assist, 5 pts per goal
-            * ⚪ **Neutral**: 4 pts per assist, 4 pts per goal
+            * 🎯 **Handler**: 6 pts per assist, 2 pts per goal
+            * 🏃 **Cutter**: 2 pts per assist, 6 pts per goal
+            * ⚪ **Hybrid**: 4 pts per assist, 4 pts per goal
             * **Callahan**: 10 points
             * **Captains**: Earn double points (x2 all scoring above)
             """)
@@ -589,10 +589,10 @@ def show_main_interface(is_live):
     # --- ROLE ASSIGNMENT GUIDE ---
     st.info("""
         **🎯 Assign Each Player a Role** – Choose the role that best matches how they'll play:
-        * **🎯 Handler** (5 pts/assist, 3 pts/goal): Primary ball handler & play-maker
-        * **🏃 Cutter** (3 pts/assist, 5 pts/goal): Field runner & finisher
-        * **⚪ Neutral** (4 pts/assist, 4 pts/goal): Versatile/Unknown role
-        """, icon="💡")
+        * **🎯 Handler** (6 pts/assist, 2 pts/goal): Primary ball handler & play-maker
+        * **🏃 Cutter** (2 pts/assist, 6 pts/goal): Field runner & finisher
+        * **⚪ Hybrid** (4 pts/assist, 4 pts/goal): Versatile/Unknown role
+    """, icon="💡")
 
     if not is_live or st.session_state.get('edit_mode'):
         m_cols = st.columns(5 if is_live else 3)
@@ -625,7 +625,7 @@ def show_main_interface(is_live):
                     # Get current role from selectbox session state key
                     div_label = DIV_OPEN_LABEL.title() if div_f == DIV_OPEN_LABEL else DIV_WOMEN_LABEL.title()
                     role_key = f"role_{p_n}_{div_label}"
-                    current_role = st.session_state.get(role_key, 'neutral')
+                    current_role = st.session_state.get(role_key, 'hybrid')
                     
                     ca, cb, cc, cd, ce = st.columns([3, 1, 1.5, 1.5, 2.5])
                     ca.write(f"**{p_n}** ({p_t})"); cb.write(f"{p_p}")
@@ -650,7 +650,7 @@ def show_main_interface(is_live):
                         role_display = {
                             "handler": "🎯 Handler",
                             "cutter": "🏃 Cutter",
-                            "neutral": "⚪ Neutral"
+                            "hybrid": "⚪ Hybrid"
                         }
                         role_cols = st.columns(3)
                         for i, role in enumerate(PLAYER_ROLES):
@@ -730,7 +730,7 @@ def show_main_interface(is_live):
                             # Get role from selectbox session state key
                             div_label = DIV_OPEN_LABEL.title() if p_info['division'] == DIV_OPEN_LABEL else DIV_WOMEN_LABEL.title()
                             role_key = f"role_{p}_{div_label}"
-                            p_role = st.session_state.get(role_key, 'neutral')
+                            p_role = st.session_state.get(role_key, 'hybrid')
                             
                             rows.append({
                                 "manager_id": active_m_id, 
@@ -766,8 +766,8 @@ def show_main_interface(is_live):
                         continue  # new player, handled by p_in
                     p_i = df_players[df_players['name'] == p_n].iloc[0]
                     div_label = DIV_OPEN_LABEL.title() if p_i['division'] == DIV_OPEN_LABEL else DIV_WOMEN_LABEL.title()
-                    current_role = st.session_state.get(f"role_{p_n}_{div_label}", 'neutral')
-                    db_role = st.session_state.db_roles.get(p_n, 'neutral')
+                    current_role = st.session_state.get(f"role_{p_n}_{div_label}", 'hybrid')
+                    db_role = st.session_state.db_roles.get(p_n, 'hybrid')
                     if current_role != db_role:
                         role_changes.add(p_n)
 
@@ -810,7 +810,7 @@ def show_main_interface(is_live):
                                         # Get role from selectbox session state key
                                         div_label = DIV_OPEN_LABEL.title() if p_i['division'] == DIV_OPEN_LABEL else DIV_WOMEN_LABEL.title()
                                         role_key = f"role_{p_n}_{div_label}"
-                                        p_role = st.session_state.get(role_key, 'neutral')
+                                        p_role = st.session_state.get(role_key, 'hybrid')
                                         
                                         ins_rows.append({
                                             "manager_id": m_id, "player_id": p_i['id'], "division": p_i['division'],
@@ -829,7 +829,7 @@ def show_main_interface(is_live):
                                 for p_n in to_insert:
                                     p_i = df_players[df_players['name'] == p_n].iloc[0]
                                     div_label = DIV_OPEN_LABEL.title() if p_i['division'] == DIV_OPEN_LABEL else DIV_WOMEN_LABEL.title()
-                                    st.session_state.db_roles[p_n] = st.session_state.get(f"role_{p_n}_{div_label}", 'neutral')
+                                    st.session_state.db_roles[p_n] = st.session_state.get(f"role_{p_n}_{div_label}", 'hybrid')
                                 
                                 # 3. Sync Session State so UI updates before rerun
                                 st.session_state.auth_user['transfers_used'] = limit_p

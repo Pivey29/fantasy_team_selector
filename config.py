@@ -16,16 +16,16 @@ MAX_TEAM_SIZE = 2
 CAPTAIN_MULTIPLIER = 2
 
 # --- PLAYER ROLES & SCORING ---
-PLAYER_ROLES = ["handler", "cutter", "neutral"]
+PLAYER_ROLES = ["handler", "cutter", "hybrid"]
 ROLE_DESCRIPTIONS = {
-    "handler": "🎯 Handler - Sets up plays (5 pts/assist, 3 pts/goal)",
-    "cutter": "🏃 Cutter - Field runner (3 pts/assist, 5 pts/goal)",
-    "neutral": "⚪ Neutral - Versatile (4 pts/assist, 4 pts/goal)"
+    "handler": "🎯 Handler - Sets up plays (6 pts/assist, 2 pts/goal)",
+    "cutter": "🏃 Cutter - Field runner (2 pts/assist, 6 pts/goal)",
+    "hybrid": "⚪ Hybrid - Versatile (4 pts/assist, 4 pts/goal)"
 }
 ROLE_MULTIPLIERS = {
-    "handler": {"assists": 5, "goals": 3},  # Handlers get bonus for assists
-    "cutter": {"assists": 3, "goals": 5},   # Cutters get bonus for goals  
-    "neutral": {"assists": 4, "goals": 4}   # Neutral gets standard points
+    "handler": {"assists": 6, "goals": 2},  # Handlers get bonus for assists
+    "cutter": {"assists": 2, "goals": 6},   # Cutters get bonus for goals
+    "hybrid": {"assists": 4, "goals": 4}   # Hybrid gets balanced points
 }
 
 PIN_LENGTH = 4

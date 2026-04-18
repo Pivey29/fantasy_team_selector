@@ -38,7 +38,7 @@ CREATE TABLE prd.rosters (
     manager_id UUID REFERENCES prd.managers(id) ON DELETE CASCADE,
     player_id UUID REFERENCES prd.players(id),
     is_captain BOOLEAN DEFAULT FALSE,
-    player_role TEXT DEFAULT 'neutral' CHECK (player_role IN ('handler', 'cutter', 'neutral')),
+    player_role TEXT DEFAULT 'hybrid' CHECK (player_role IN ('handler', 'cutter', 'hybrid')),
     division TEXT NOT NULL, 
     acquired_at TIMESTAMPTZ DEFAULT now(),
     valid_from TIMESTAMPTZ DEFAULT now(),
@@ -58,7 +58,9 @@ CREATE TABLE prd.player_scores (
 
 -- MIGRATION: Add player_role to existing rosters table (if not already present)
 -- Uncomment and run if updating an existing database:
---ALTER TABLE prd.rosters ADD COLUMN IF NOT EXISTS player_role TEXT DEFAULT 'neutral' CHECK (player_role IN ('handler', 'cutter', 'neutral'));
+--ALTER TABLE prd.rosters ADD COLUMN IF NOT EXISTS player_role TEXT DEFAULT 'hybrid' CHECK (player_role IN ('handler', 'cutter', 'hybrid'));
+-- If migrating from neutral to hybrid values:
+--UPDATE prd.rosters SET player_role = 'hybrid' WHERE player_role = 'neutral';
 
 -- 5. Security & Permissions (The "No-Headache" Configuration)
 -- Enable RLS on all
