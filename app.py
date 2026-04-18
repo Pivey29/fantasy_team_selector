@@ -538,14 +538,14 @@ def show_main_interface(is_live):
         for team, count in team_counts.items():
             st.markdown(f":{'orange' if count >= MAX_TEAM_SIZE else 'gray'}[**{team}**: {count}/{MAX_TEAM_SIZE}]")
         st.divider()
-        st.subheader(f"Opens ({count_open}/{MIN_GENDER_SIZE}+)")
+        st.subheader(f"Opens ({count_open}/{MIN_GENDER_SIZE})")
         for p in st.session_state.roster:
             p_m = df_players[df_players['name'] == p]
             if not p_m.empty and p_m.iloc[0]['division'] == DIV_OPEN_LABEL:
                 role_key = f"role_{p}_{DIV_OPEN_LABEL.title()}"
                 p_role = st.session_state.get(role_key, 'neutral')
                 st.write(f"{'⭐' if p == st.session_state.captain_open else '•'} {p} ({p_role})")
-        st.subheader(f"Womens ({count_women}/{MIN_GENDER_SIZE}+)")
+        st.subheader(f"Womens ({count_women}/{MIN_GENDER_SIZE})")
         for p in st.session_state.roster:
             p_m = df_players[df_players['name'] == p]
             if not p_m.empty and p_m.iloc[0]['division'] == DIV_WOMEN_LABEL:
@@ -560,7 +560,7 @@ def show_main_interface(is_live):
         rules_text = textwrap.dedent(f"""
             * Select a full roster (**{ROSTER_SIZE} players**)
             * **{BUDGET_LIMIT}** units to spend
-            * Min **{MIN_GENDER_SIZE}** per division
+            * **{MIN_GENDER_SIZE}** per division
             * Max **{MAX_TEAM_SIZE}** per club
             * Select 1 captain per division
             * Assign each player a role: **Handler**, **Cutter**, or **Neutral** (default)
@@ -572,7 +572,7 @@ def show_main_interface(is_live):
             * **Neutral** ⚪: Versatile player - standard point multipliers
 
             **In Tournament/Live Transfers:**
-            * {MAX_PLAYER_TRANSFERS} player transfers and {MAX_CAPTAIN_CHANGES} allowed throughout the tournament.
+            * {MAX_PLAYER_TRANSFERS} player transfers and {MAX_CAPTAIN_CHANGES} captain transfers allowed throughout the tournament.
             * switching a player's role (e.g. from 'cutter' to 'handler' counts as a transfer)
             * these changes will only come into effect the next round of matches.
             * points DO NOT count retrospectively for transfers/captain changes.

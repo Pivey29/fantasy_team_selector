@@ -49,12 +49,12 @@ def get_now():
 
 # --- TOURNAMENT MILESTONES ---
 RANKING_END_DT = datetime(2026, 4, 10, 18, 0, tzinfo=SAST)
-DRAFT_END_DT   = datetime(2026, 4, 25, 8, 0, tzinfo=SAST)
-TOURNAMENT_START_DT = datetime(2026, 4, 13, 8, 0, tzinfo=SAST) # Morning of Day 1
+DRAFT_END_DT   = datetime(2026, 4, 29, 8, 0, tzinfo=SAST)
+TOURNAMENT_START_DT = datetime(2026, 4, 30, 8, 0, tzinfo=SAST) # Morning of Day 1
 
 # --- 3. STAGE AUTOMATION ---
 # Set to "RATINGS", "DRAFT", "LIVE" to override, or None for Auto-mode
-MANUAL_STAGE = "LIVE" 
+MANUAL_STAGE = "DRAFT" 
 
 def get_current_stage():
     if MANUAL_STAGE:
