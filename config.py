@@ -14,8 +14,22 @@ MAX_GENDER_SIZE = 5
 MIN_GENDER_SIZE = 5
 MAX_TEAM_SIZE = 2
 CAPTAIN_MULTIPLIER = 2
+
+# --- PLAYER ROLES & SCORING ---
+PLAYER_ROLES = ["handler", "cutter", "hybrid"]
+ROLE_DESCRIPTIONS = {
+    "handler": "🎯 Handler - Sets up plays (6 pts/assist, 2 pts/goal)",
+    "cutter": "🏃 Cutter - Field runner (2 pts/assist, 6 pts/goal)",
+    "hybrid": "⚪ Hybrid - Versatile (4 pts/assist, 4 pts/goal)"
+}
+ROLE_MULTIPLIERS = {
+    "handler": {"assists": 6, "goals": 2},  # Handlers get bonus for assists
+    "cutter": {"assists": 2, "goals": 6},   # Cutters get bonus for goals
+    "hybrid": {"assists": 4, "goals": 4}   # Hybrid gets balanced points
+}
+
 PIN_LENGTH = 4
-MAX_PLAYER_TRANSFERS = 2
+MAX_PLAYER_TRANSFERS = 4
 MAX_CAPTAIN_CHANGES = 2
 # tables names from DB
 TABLE_PLAYERS = "players"
@@ -24,8 +38,8 @@ TABLE_MANAGERS = "managers"
 TABLE_ROSTERS  = "rosters"
 
 # Pricing
-MEAN = 12
-STD_DEV = 7
+MEAN = 11
+STD_DEV = 6
 
 # --- TIMEZONE & CALCULATIONS ---
 SAST = pytz.timezone('Africa/Johannesburg')
@@ -34,13 +48,13 @@ def get_now():
     return datetime.now(SAST)
 
 # --- TOURNAMENT MILESTONES ---
-RANKING_END_DT = datetime(2026, 4, 10, 18, 0, tzinfo=SAST)
-DRAFT_END_DT   = datetime(2026, 4, 12, 20, 0, tzinfo=SAST)
-TOURNAMENT_START_DT = datetime(2026, 4, 13, 8, 0, tzinfo=SAST) # Morning of Day 1
+RANKING_END_DT = datetime(2026, 4, 18, 18, 0, tzinfo=SAST)
+DRAFT_END_DT   = datetime(2026, 4, 25, 8, 0, tzinfo=SAST)
+TOURNAMENT_START_DT = datetime(2026, 4, 25, 8, 0, tzinfo=SAST) # Morning of Day 1
 
 # --- 3. STAGE AUTOMATION ---
 # Set to "RATINGS", "DRAFT", "LIVE" to override, or None for Auto-mode
-MANUAL_STAGE = "RATINGS" 
+MANUAL_STAGE = None
 
 def get_current_stage():
     if MANUAL_STAGE:
