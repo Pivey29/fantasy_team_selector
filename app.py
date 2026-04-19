@@ -560,11 +560,11 @@ def show_main_interface(is_live):
         rules_text = textwrap.dedent(f"""
             * Select a full roster (**{ROSTER_SIZE} players**)
             * **{BUDGET_LIMIT}** units to spend
-            * **{MIN_GENDER_SIZE}** per division
-            * Max **{MAX_TEAM_SIZE}** per club
+            * **{MIN_GENDER_SIZE}** players per division
+            * Max **{MAX_TEAM_SIZE}** players per club
             * Select 1 captain per division
             * Assign each player a role: **Handler**, **Cutter**, or **Hybrid** (default)
-            * Unlimited changes allowed until {DRAFT_END_DT} - just log back in to your profile to make the changes.
+            * Unlimited changes allowed until {DRAFT_END_DT.strftime("%Y-%m-%d %H:%M")} - just log back in to your profile to make the changes.
 
             **Player Roles:**
             * **Handler** 🎯: Primary ball handler - earns bonus points for assists
