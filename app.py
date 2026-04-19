@@ -320,13 +320,12 @@ def show_main_interface(is_live):
         st.balloons()
         st.success(f"Great job, {manager_name}! Your roster ('{team_name}') is officially registered.")
         st.info(f"""
-            Please pay for your team (R50 per team).
-            (Reference: name_fantasy)
+            Please pay for your team (R50 per team with reference: name_fantasy) using:
                    
-            **Snapscan**  
+            - **Snapscan**  
             https://pos.snapscan.io/qr/HND7YtTk?id=Name_Fantasy&amount=5000
                 
-            **EFT**  
+            - **EFT**  
             Bank: FNB/RMB  
             Account Holder: Dylan Sims  
             Account Type: FNB Premier Current Account  
