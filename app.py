@@ -318,13 +318,22 @@ def show_main_interface(is_live):
     if st.session_state.submitted:
 
         st.balloons()
-        success = textwrap.dedent(f"""Great job, {manager_name}! Your roster ('{team_name}') is officially registered.
+        st.success(f"Great job, {manager_name}! Your roster ('{team_name}') is officially registered.")
+        st.info(f"""
             Please pay for your team (R50 per team).
+            (Reference: name_fantasyown)
                    
-            **Snapscan** (Please include your name and team name as reference)
+            **Snapscan** 
             https://pos.snapscan.io/qr/HND7YtTk?id=Name_Fantasy&amount=5000
+                
+            **EFT**
+            Bank: FNB/RMB
+            Account Holder: Dylan Sims
+            Account Type: FNB Premier Current Account
+
+            Account Number: 62164688388
+            Branch Code: 250655
             """)
-        st.success(success)
     
         col1, col2 = st.columns(2)
         with col1:
