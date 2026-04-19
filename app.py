@@ -323,15 +323,14 @@ def show_main_interface(is_live):
             Please pay for your team (R50 per team).
             (Reference: name_fantasyown)
                    
-            **Snapscan** 
+            **Snapscan**\n
             https://pos.snapscan.io/qr/HND7YtTk?id=Name_Fantasy&amount=5000
                 
-            **EFT**
-            Bank: FNB/RMB
-            Account Holder: Dylan Sims
-            Account Type: FNB Premier Current Account
-
-            Account Number: 62164688388
+            **EFT**\n
+            Bank: FNB/RMB\n
+            Account Holder: Dylan Sims\n
+            Account Type: FNB Premier Current Account\n
+            Account Number: 62164688388\n
             Branch Code: 250655
             """)
     
