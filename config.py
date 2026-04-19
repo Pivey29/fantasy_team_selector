@@ -7,7 +7,7 @@ from datetime import datetime
 TOURNAMENT_NAME = "OW Nationals 2026 - Fantasy Draft"
 DIV_OPEN_LABEL = "opens"
 DIV_WOMEN_LABEL = "womens"
-SCHEMA = "dev"
+SCHEMA = "prd"
 ROSTER_SIZE= 10
 BUDGET_LIMIT = 100
 MAX_GENDER_SIZE = 5
@@ -48,13 +48,13 @@ def get_now():
     return datetime.now(SAST)
 
 # --- TOURNAMENT MILESTONES ---
-RANKING_END_DT = datetime(2026, 4, 10, 18, 0, tzinfo=SAST)
-DRAFT_END_DT   = datetime(2026, 4, 29, 8, 0, tzinfo=SAST)
-TOURNAMENT_START_DT = datetime(2026, 4, 30, 8, 0, tzinfo=SAST) # Morning of Day 1
+RANKING_END_DT = datetime(2026, 4, 18, 18, 0, tzinfo=SAST)
+DRAFT_END_DT   = datetime(2026, 4, 25, 8, 0, tzinfo=SAST)
+TOURNAMENT_START_DT = datetime(2026, 4, 25, 8, 0, tzinfo=SAST) # Morning of Day 1
 
 # --- 3. STAGE AUTOMATION ---
 # Set to "RATINGS", "DRAFT", "LIVE" to override, or None for Auto-mode
-MANUAL_STAGE = "DRAFT" 
+MANUAL_STAGE = None
 
 def get_current_stage():
     if MANUAL_STAGE:
