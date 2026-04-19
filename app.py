@@ -276,7 +276,7 @@ def show_main_interface(is_live):
             # DRAFT MODE: team name (unique) + manager name (new only) + PIN
             team_name = st.text_input(
                 "Team Name (unique):",
-                placeholder="Your fantasy team name...",
+                placeholder="Your fantasy team name to register/login...",
                 key="team_name_persistent"
             ).strip()
 
