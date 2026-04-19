@@ -321,7 +321,7 @@ def show_main_interface(is_live):
         st.success(f"Great job, {manager_name}! Your roster ('{team_name}') is officially registered.")
         st.info(f"""
             Please pay for your team (R50 per team).
-            (Reference: name_fantasyown)
+            (Reference: name_fantasy)
                    
             **Snapscan**  
             https://pos.snapscan.io/qr/HND7YtTk?id=Name_Fantasy&amount=5000
