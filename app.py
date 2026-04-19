@@ -3,7 +3,7 @@ import textwrap
 import pandas as pd
 import pytz
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from st_supabase_connection import SupabaseConnection
 
 # --- 1. SETTINGS & CONFIG --- 
@@ -20,12 +20,14 @@ from config import (
     CAPTAIN_MULTIPLIER,
     MIN_GENDER_SIZE,
     PIN_LENGTH,
+    ADMIN_PIN,
     TABLE_MANAGERS,
     TABLE_PLAYERS,
     TABLE_ROSTERS,
     TABLE_SCORES,
     SCHEMA,
     DRAFT_END_DT,
+    TOURNAMENT_START_DT,
     get_current_stage,
     PLAYER_ROLES,
     ROLE_MULTIPLIERS,
@@ -74,6 +76,8 @@ if 'manager_id' not in st.session_state: st.session_state.manager_id = None
 if 'auth_key' not in st.session_state: st.session_state.auth_key = None
 if 'confirmed_team_name' not in st.session_state: st.session_state.confirmed_team_name = None
 if 'rank_form_v' not in st.session_state: st.session_state.rank_form_v = 0
+if 'admin_auth' not in st.session_state: st.session_state.admin_auth = False
+if 'admin_team_selected' not in st.session_state: st.session_state.admin_team_selected = None
 
 # Global Data Load
 df_players = load_player_data()
@@ -174,12 +178,39 @@ def get_processed_results(conn):
             "is_captain, player_role, manager_id, managers(manager_name, team_name), player_id, players(name), valid_from, valid_to"
         ).execute()  # .is_("valid_to", "null")
         
-        # Pull Scores
+        # Pull scores and schema metadata
+        schema_supports_stats = True
+        supports_day_number = False
+        score_res = None
+        try:
+            conn.client.schema(SCHEMA).table(TABLE_SCORES).select("goals").limit(1).execute()
+        except Exception:
+            schema_supports_stats = False
+
+        try:
+            conn.client.schema(SCHEMA).table(TABLE_SCORES).select("day_number").limit(1).execute()
+            supports_day_number = True
+        except Exception:
+            supports_day_number = False
+
+        if schema_supports_stats:
+            select_cols = "player_id, goals, assists, callahans"
+        else:
+            select_cols = "player_id, points_earned"
+        supports_game_datetime = False
+        try:
+            conn.client.schema(SCHEMA).table(TABLE_SCORES).select("game_datetime").limit(1).execute()
+            supports_game_datetime = True
+            select_cols += ", game_datetime"
+        except Exception:
+            if supports_day_number:
+                select_cols += ", day_number"
+
         score_res = (conn.client.schema(SCHEMA)
                      .table(TABLE_SCORES)
-                     .select("player_id, points_earned")
+                     .select(select_cols)
                      .execute())
-        
+
         if not roster_res.data:
             return pd.DataFrame(), pd.DataFrame()
 
@@ -189,31 +220,87 @@ def get_processed_results(conn):
             'managers.team_name': 'Team_Name',
             'players.name': 'player_name'
         })
+        df_rosters['valid_from'] = pd.to_datetime(df_rosters['valid_from'], utc=True, errors='coerce')
+        df_rosters['valid_to'] = pd.to_datetime(df_rosters['valid_to'], utc=True, errors='coerce')
+        df_rosters['valid_to'] = df_rosters['valid_to'].fillna(pd.Timestamp.max.tz_localize('UTC'))
 
         if not score_res.data:
-            df_scores = pd.DataFrame(columns=['player_id', 'points_earned'])
-        else:
-            df_scores = pd.DataFrame(score_res.data).groupby('player_id')['points_earned'].sum().reset_index()
-
-        merged = df_rosters.merge(df_scores, on="player_id", how="left")
-        merged['points_earned'] = merged['points_earned'].fillna(0)
-        
-        # Apply role and captain multipliers
-        def calculate_points(row):
-            base_points = row['points_earned']
-            
-            # Apply role multiplier (simplified - would need to break down goals vs assists in real implementation)
-            # For now, apply uniform role bonus
-            role = row.get('player_role', 'hybrid') or 'hybrid'
-            role_mult = 1.0  # Default, would need actual goal/assist breakdown for proper multiplier
-            
-            # Apply captain multiplier first
-            if row['is_captain']:
-                return base_points * CAPTAIN_MULTIPLIER * role_mult
+            if schema_supports_stats:
+                cols = ['player_id', 'goals', 'assists', 'callahans']
             else:
-                return base_points * role_mult
-        
-        merged['calc_pts'] = merged.apply(calculate_points, axis=1)
+                cols = ['player_id', 'points_earned']
+            if supports_day_number:
+                cols.append('day_number')
+            df_scores = pd.DataFrame(columns=cols)
+        else:
+            df_scores = pd.DataFrame(score_res.data)
+
+        # Compute the game datetime for each score row
+        if 'game_datetime' in df_scores.columns:
+            df_scores['game_datetime'] = pd.to_datetime(df_scores['game_datetime'], utc=True)
+        elif 'day_number' in df_scores.columns:
+            df_scores['day_number'] = df_scores['day_number'].fillna(1).astype(int)
+            df_scores['game_datetime'] = df_scores['day_number'].apply(
+                lambda d: TOURNAMENT_START_DT + timedelta(days=max(0, d - 1))
+            )
+        else:
+            df_scores['game_datetime'] = TOURNAMENT_START_DT
+
+        active_records = []
+        for _, roster_row in df_rosters.iterrows():
+            player_id = roster_row['player_id']
+            valid_from = roster_row['valid_from']
+            valid_to = roster_row['valid_to']
+            if pd.isna(valid_from):
+                continue
+
+            rosters_scores = df_scores[df_scores['player_id'] == player_id].copy()
+            rosters_scores['game_datetime'] = pd.to_datetime(rosters_scores['game_datetime'], utc=True)
+            rosters_scores = rosters_scores[(rosters_scores['game_datetime'] >= valid_from) & (rosters_scores['game_datetime'] < valid_to)]
+
+            if rosters_scores.empty:
+                total_goals = total_assists = total_callahans = 0.0
+                total_points = 0.0
+            else:
+                if schema_supports_stats:
+                    total_goals = rosters_scores['goals'].fillna(0).astype(float).sum()
+                    total_assists = rosters_scores['assists'].fillna(0).astype(float).sum()
+                    total_callahans = rosters_scores['callahans'].fillna(0).astype(float).sum()
+                    multiplier = ROLE_MULTIPLIERS.get(roster_row.get('player_role', 'hybrid') or 'hybrid', ROLE_MULTIPLIERS['hybrid'])
+                    total_points = (total_goals * multiplier['goals']
+                                    + total_assists * multiplier['assists']
+                                    + total_callahans * 10)
+                else:
+                    total_goals = total_assists = total_callahans = 0.0
+                    total_points = rosters_scores['points_earned'].fillna(0).astype(float).sum()
+
+            role = roster_row.get('player_role', 'hybrid') or 'hybrid'
+            calc_pts = total_points * CAPTAIN_MULTIPLIER if roster_row['is_captain'] else total_points
+
+            active_records.append({
+                'manager_id': roster_row['manager_id'],
+                'Team_Name': roster_row['Team_Name'],
+                'player_id': player_id,
+                'player_name': roster_row['player_name'],
+                'player_role': role,
+                'is_captain': roster_row['is_captain'],
+                'valid_from': valid_from,
+                'valid_to': valid_to,
+                'goals': total_goals,
+                'assists': total_assists,
+                'callahans': total_callahans,
+                'points_earned': total_points,
+                'calc_pts': calc_pts
+            })
+
+        merged = pd.DataFrame(active_records)
+        if merged.empty:
+            leaderboard = pd.DataFrame(columns=["Team", "Score"])
+            return leaderboard, pd.DataFrame()
+
+        leaderboard = merged.groupby("Team_Name")["calc_pts"].sum().reset_index()
+        leaderboard.columns = ["Team", "Score"]
+        return leaderboard.sort_values(by="Score", ascending=False).reset_index(drop=True), merged
 
         leaderboard = merged.groupby("Team_Name")["calc_pts"].sum().reset_index()
         leaderboard.columns = ["Team", "Score"]
@@ -484,18 +571,22 @@ def show_main_interface(is_live):
                     my_points = full_data[full_data['manager_id'] == m_id] if m_id else pd.DataFrame()
                     if not my_points.empty:
                         _display = my_points[['player_name', 'points_earned', 'is_captain', 'player_role', 'calc_pts', 'valid_from', 'valid_to']].copy()
+                        max_ts_utc = pd.Timestamp.max.tz_localize('UTC')
                         def fmt_ts(val):
-                            if not val or val == 0:
+                            if pd.isna(val):
                                 return ''
                             try:
-                                return pd.to_datetime(val, utc=True).strftime('%-d %b %H:%M')
+                                ts = pd.to_datetime(val, utc=True)
+                                if ts == max_ts_utc:
+                                    return ''
+                                return f"{ts.day} {ts.strftime('%b %H:%M')}"
                             except Exception:
                                 return str(val)
                         _display['valid_from'] = _display['valid_from'].apply(fmt_ts)
                         _display['valid_to'] = _display['valid_to'].apply(fmt_ts)
                         _display = _display.sort_values(by=["player_name", "valid_from"])
                         st.dataframe(_display, hide_index=True, use_container_width=True)
-                    else: 
+                    else:
                         st.write(f"**Players:** {', '.join(st.session_state.roster)}")
                 else: 
                     st.write(f"**Players:** {', '.join(st.session_state.roster)}")
@@ -866,10 +957,225 @@ def show_main_interface(is_live):
                 if not captains_set:
                     st.info("ℹ️ You must select 1 captain per division before you can submit your team.")
 
+# --- ADMIN: SECRET SCORE ENTRY PAGE ---
+def show_admin_score_entry():
+    """Completely hidden admin page for bulk score entry."""
+    st.title("🔐 Admin Score Entry")
+    
+    # Admin authentication
+    if not st.session_state.admin_auth:
+        st.subheader("🔐 Admin Authentication")
+        admin_pin = st.text_input("Enter admin PIN:", type="password", key="admin_pin_input")
+        if st.button("Authenticate", use_container_width=True):
+            if admin_pin == ADMIN_PIN:
+                st.session_state.admin_auth = True
+                st.rerun()
+            else:
+                st.error("❌ Invalid PIN")
+        st.stop()
+    
+    # Admin header with logout
+    col1, col2 = st.columns([5, 1])
+    with col1:
+        st.write("👑 **Admin Access Granted**")
+    with col2:
+        if st.button("Logout", use_container_width=True):
+            st.session_state.admin_auth = False
+            st.session_state.admin_team_selected = None
+            st.rerun()
+    
+    st.divider()
+    
+    # Game information
+    st.subheader("🏆 Game Information")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        game_date = st.date_input("Game Date", key="game_date")
+    
+    with col2:
+        game_time = st.time_input("Game Start Time", key="game_time")
+    
+    st.divider()
+    
+    # Team selection (Real teams like Mutiny, Rex, etc.)
+    st.subheader("🏟️ Select Real Team")
+    try:
+        # Get all unique real teams from player data
+        real_teams = sorted(df_players['team'].unique())
+        
+        selected_team = st.selectbox(
+            "Choose Real Team:",
+            options=real_teams,
+            index=real_teams.index(st.session_state.admin_team_selected) if st.session_state.admin_team_selected in real_teams else 0,
+            key="admin_team_select"
+        )
+        
+        st.session_state.admin_team_selected = selected_team
+        
+        if selected_team:
+            # Get all players from this real team
+            team_players = df_players[df_players['team'] == selected_team]
+            
+            if not team_players.empty:
+                st.subheader(f"📋 {selected_team} Players")
+                
+                # Create score entry form for all players
+                st.write("Enter scores for each player in this game:")
+                
+                # Prepare data for bulk entry
+                player_entries = []
+                cols = st.columns(4)
+                headers = ["Player", "Goals", "Assists", "Callahans"]
+                
+                for i, header in enumerate(headers):
+                    cols[i].write(f"**{header}**")
+                
+                # Create input fields for each player
+                for idx, player_row in team_players.iterrows():
+                    player_name = player_row['name']
+                    player_id = player_row['id']
+                    
+                    # Check if this player is a captain in any fantasy team
+                    captain_check = conn.client.schema(SCHEMA).table(TABLE_ROSTERS).select(
+                        "is_captain"
+                    ).eq("player_id", player_id).is_("valid_to", "null").execute()
+                    
+                    is_captain = any(r['is_captain'] for r in captain_check.data) if captain_check.data else False
+                    
+                    display_name = f"{'⭐' if is_captain else ''} {player_name}"
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    with col1:
+                        st.write(display_name)
+                    
+                    with col2:
+                        goals = st.number_input(
+                            f"goals_{player_id}",
+                            min_value=0,
+                            max_value=30,
+                            value=0,
+                            step=1,
+                            label_visibility="collapsed",
+                            key=f"goals_{player_id}"
+                        )
+                    
+                    with col3:
+                        assists = st.number_input(
+                            f"assists_{player_id}",
+                            min_value=0,
+                            max_value=30,
+                            value=0,
+                            step=1,
+                            label_visibility="collapsed",
+                            key=f"assists_{player_id}"
+                        )
+                    
+                    with col4:
+                        callahans = st.number_input(
+                            f"callahans_{player_id}",
+                            min_value=0,
+                            max_value=10,
+                            value=0,
+                            step=1,
+                            label_visibility="collapsed",
+                            key=f"callahans_{player_id}"
+                        )
+                    
+                    player_entries.append({
+                        'player_id': player_id,
+                        'player_name': player_name,
+                        'goals': goals,
+                        'assists': assists,
+                        'callahans': callahans
+                    })
+                
+                st.divider()
+                
+                # Save button
+                if st.button("💾 Save All Scores", use_container_width=True, type="primary"):
+                    try:
+                        # Create game timestamp
+                        game_datetime = datetime.combine(game_date, game_time)
+                        game_datetime = pytz.timezone('Africa/Johannesburg').localize(game_datetime)
+                        game_datetime_str = game_datetime.isoformat()
+                        
+                        def get_day_number(dt):
+                            return (dt.date() - TOURNAMENT_START_DT.date()).days + 1
+                        
+                        schema_supports_stats = True
+                        supports_day_number = False
+                        supports_game_datetime = False
+                        try:
+                            conn.client.schema(SCHEMA).table(TABLE_SCORES).select("goals").limit(1).execute()
+                        except Exception:
+                            schema_supports_stats = False
+                        try:
+                            conn.client.schema(SCHEMA).table(TABLE_SCORES).select("day_number").limit(1).execute()
+                            supports_day_number = True
+                        except Exception:
+                            supports_day_number = False
+                        try:
+                            conn.client.schema(SCHEMA).table(TABLE_SCORES).select("game_datetime").limit(1).execute()
+                            supports_game_datetime = True
+                        except Exception:
+                            supports_game_datetime = False
+                        
+                        scores_to_insert = []
+                        saved_count = 0
+                        
+                        for entry in player_entries:
+                            if entry['goals'] > 0 or entry['assists'] > 0 or entry['callahans'] > 0:
+                                if schema_supports_stats:
+                                    row = {
+                                        "player_id": entry['player_id'],
+                                        "goals": entry['goals'],
+                                        "assists": entry['assists'],
+                                        "callahans": entry['callahans']
+                                    }
+                                else:
+                                    row = {
+                                        "player_id": entry['player_id'],
+                                        "points_earned": entry['goals'] + entry['assists'] + entry['callahans'] * 10
+                                    }
+                                if supports_game_datetime:
+                                    row["game_datetime"] = game_datetime_str
+                                elif supports_day_number:
+                                    row["day_number"] = get_day_number(game_datetime)
+                                scores_to_insert.append(row)
+                                saved_count += 1
+                        
+                        if scores_to_insert:
+                            conn.client.schema(SCHEMA).table(TABLE_SCORES).insert(scores_to_insert).execute()
+                            
+                            st.success(f"✅ Saved scores for {saved_count} players from {selected_team} in game on {game_date} at {game_time}")
+                            st.balloons()
+                            
+                            st.session_state.admin_team_selected = None
+                            time.sleep(2)
+                            st.rerun()
+                        else:
+                            st.warning("⚠️ No scores to save - all players have 0 stats")
+                    except Exception as e:
+                        st.error(f"Error saving scores: {e}")
+            else:
+                st.info(f"No players found for {selected_team}")
+        
+    except Exception as e:
+        st.error(f"Error loading data: {e}")
+
 # --- MAIN ROUTER ---
-if STAGE == "RATINGS":
-    show_ratings_phase()
-elif STAGE == "DRAFT":
-    show_main_interface(is_live=False)
-elif STAGE == "LIVE":
-    show_main_interface(is_live=True)
+# Check for admin access via URL parameter
+query_params = st.query_params
+admin_param = query_params.get("admin")
+if admin_param == "true":
+    show_admin_score_entry()
+else:
+    # Normal fantasy league routing
+    if STAGE == "RATINGS":
+        show_ratings_phase()
+    elif STAGE == "DRAFT":
+        show_main_interface(is_live=False)
+    elif STAGE == "LIVE":
+        show_main_interface(is_live=True)

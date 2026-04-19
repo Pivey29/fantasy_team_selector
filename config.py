@@ -7,7 +7,7 @@ from datetime import datetime
 TOURNAMENT_NAME = "OW Nationals 2026 - Fantasy Draft"
 DIV_OPEN_LABEL = "opens"
 DIV_WOMEN_LABEL = "womens"
-SCHEMA = "prd"
+SCHEMA = "dev"
 ROSTER_SIZE= 10
 BUDGET_LIMIT = 100
 MAX_GENDER_SIZE = 5
@@ -30,6 +30,7 @@ ROLE_MULTIPLIERS = {
 
 PIN_LENGTH = 4
 MAX_PLAYER_TRANSFERS = 5
+ADMIN_PIN = "1234"  # Change this to your secure admin PIN
 MAX_CAPTAIN_CHANGES = 2
 # tables names from DB
 TABLE_PLAYERS = "players"
@@ -54,7 +55,7 @@ TOURNAMENT_START_DT = datetime(2026, 4, 25, 8, 0, tzinfo=SAST) # Morning of Day 
 
 # --- 3. STAGE AUTOMATION ---
 # Set to "RATINGS", "DRAFT", "LIVE" to override, or None for Auto-mode
-MANUAL_STAGE = None
+MANUAL_STAGE = "LIVE"
 
 def get_current_stage():
     if MANUAL_STAGE:
