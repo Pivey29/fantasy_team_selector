@@ -29,7 +29,7 @@ ROLE_MULTIPLIERS = {
 }
 
 PIN_LENGTH = 4
-MAX_PLAYER_TRANSFERS = 4
+MAX_PLAYER_TRANSFERS = 5
 MAX_CAPTAIN_CHANGES = 2
 # tables names from DB
 TABLE_PLAYERS = "players"
@@ -68,15 +68,6 @@ def get_current_stage():
     else:
         return "LIVE"
 
-def get_current_day():
-    """Calculates tournament day (1, 2, 3...) based on start date."""
-    now = get_now()
-    if now < TOURNAMENT_START_DT:
-        return 0 # Tournament hasn't started
-    
-    delta = now - TOURNAMENT_START_DT
-    # Adding 1 because Day 1 starts at hour 0 of the tournament
-    return delta.days + 1
 
 def get_current_stage():
     if MANUAL_STAGE: return MANUAL_STAGE
