@@ -318,7 +318,11 @@ def show_main_interface(is_live):
     if st.session_state.submitted:
 
         st.balloons()
-        st.success(f"Great job, {manager_name}! Your roster ('{team_name}') is officially registered.")
+        st.success(f"""Great job, {manager_name}! Your roster ('{team_name}') is officially registered.
+                   Please pay for your team (R50 per team).
+                   
+                   **Snapscan**
+                   https://pos.snapscan.io/qr/HND7YtTk?id=Name_Fantasy&amount=5000""")
     
         col1, col2 = st.columns(2)
         with col1:
