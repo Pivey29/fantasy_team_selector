@@ -472,9 +472,47 @@ def show_main_interface(is_live):
         
         # 3. Define Tabs
         # Updated Tab list
-        standings_tab, matches_tab, fantasy_tab, spirit_tab, portal_tab = st.tabs([
-            "📊 Standings", "📅 Results", "💎 Leaderboard", "😇 Spirit", "🛡️ Portal"
+        portal_tab, fantasy_tab, standings_tab, matches_tab, spirit_tab = st.tabs([
+            "🛡️ Manager Transfer Portal", "💎 Fantasy Leaderboard", "📅 Match Results", "📊 Standings", "😇 Spirit", 
         ])
+
+        with portal_tab:
+            # ALL AUTH AND TRANSFER LOGIC LIVES HERE NOW
+            if not already_confirmed:
+                st.subheader("🛡️ Manager Login")
+                col_l1, col_l2 = st.columns(2)
+                with col_l1:
+                    t_name = st.selectbox("Select Team", all_team_names, index=None, key="live_login_team")
+                with col_l2:
+                    m_pin = st.text_input("PIN", type="password", key="live_login_pin")
+                
+                if t_name and len(m_pin) == PIN_LENGTH:
+                    # AUTHENTICATION CHECK
+                    auth_res = conn.client.schema(SCHEMA).table(TABLE_MANAGERS).select("*").eq("team_name", t_name).eq("pin", m_pin).execute()
+                    if auth_res.data:
+                        st.session_state.confirmed_team_name = t_name
+                        st.session_state.confirmed_mgr_name = auth_res.data[0]['manager_name']
+                        st.session_state.confirmed_mgr_pin = m_pin
+                        st.session_state.manager_id = auth_res.data[0]['id']
+                        st.rerun()
+                    else:
+                        st.error("❌ Incorrect PIN")
+            else:
+                # This function should contain your existing roster/transfer UI code
+                render_manager_portal_logic()      
+
+        with fantasy_tab:
+            st.subheader("💎 Fantasy Rankings")
+            board, _ = get_processed_results(conn)
+            if not board.empty:
+                board['Rank'] = board['Score'].rank(method='min', ascending=False).astype(int)
+                # Metrics for Top 3
+                c1, c2, c3 = st.columns(3)
+                for i, col in enumerate([c1, c2, c3]):
+                    if i < len(board):
+                        row = board.iloc[i]
+                        col.metric(f"{['🥇', '🥈', '🥉'][i]} {row['Team']}", f"{int(row['Score'])} pts")
+                st.dataframe(board[['Rank', 'Team', 'Score']], use_container_width=True, hide_index=True)
 
         with spirit_tab:
             st.subheader("😇 Spirit of the Game Leaderboard")
@@ -521,44 +559,6 @@ def show_main_interface(is_live):
                     st.write(f"**{row['stage']}**: {row['team_a']} **{round(row['score_a'], 0)} - {round(row['score_b'], 0)}** {row['team_b']}")
             else:
                 st.info("No matches completed yet.")
-
-        with fantasy_tab:
-            st.subheader("💎 Fantasy Rankings")
-            board, _ = get_processed_results(conn)
-            if not board.empty:
-                board['Rank'] = board['Score'].rank(method='min', ascending=False).astype(int)
-                # Metrics for Top 3
-                c1, c2, c3 = st.columns(3)
-                for i, col in enumerate([c1, c2, c3]):
-                    if i < len(board):
-                        row = board.iloc[i]
-                        col.metric(f"{['🥇', '🥈', '🥉'][i]} {row['Team']}", f"{int(row['Score'])} pts")
-                st.dataframe(board[['Rank', 'Team', 'Score']], use_container_width=True, hide_index=True)
-
-        with portal_tab:
-            # ALL AUTH AND TRANSFER LOGIC LIVES HERE NOW
-            if not already_confirmed:
-                st.subheader("🛡️ Manager Login")
-                col_l1, col_l2 = st.columns(2)
-                with col_l1:
-                    t_name = st.selectbox("Select Team", all_team_names, index=None, key="live_login_team")
-                with col_l2:
-                    m_pin = st.text_input("PIN", type="password", key="live_login_pin")
-                
-                if t_name and len(m_pin) == PIN_LENGTH:
-                    # AUTHENTICATION CHECK
-                    auth_res = conn.client.schema(SCHEMA).table(TABLE_MANAGERS).select("*").eq("team_name", t_name).eq("pin", m_pin).execute()
-                    if auth_res.data:
-                        st.session_state.confirmed_team_name = t_name
-                        st.session_state.confirmed_mgr_name = auth_res.data[0]['manager_name']
-                        st.session_state.confirmed_mgr_pin = m_pin
-                        st.session_state.manager_id = auth_res.data[0]['id']
-                        st.rerun()
-                    else:
-                        st.error("❌ Incorrect PIN")
-            else:
-                # This function should contain your existing roster/transfer UI code
-                render_manager_portal_logic()
 
     else:
         # --- DRAFT MODE (NON-LIVE) ---
