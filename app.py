@@ -608,15 +608,19 @@ def show_main_interface(is_live):
             manager_pin = st.text_input(pin_label, key="mgr_pin_persistent", type="password", max_chars=PIN_LENGTH)
 
             # New team: require all fields before showing Start Drafting
-            if team_name and not is_existing_team and manager_name and len(manager_pin) == PIN_LENGTH:
-                if st.button("🚀 Start Drafting", type="primary", use_container_width=True):
-                    st.session_state.confirmed_team_name = team_name
-                    st.session_state.confirmed_mgr_name = manager_name
-                    st.session_state.confirmed_mgr_pin = manager_pin
-                    st.rerun()
-                st.stop()
+            if team_name and not is_existing_team:
+                if not manager_name:
+                    st.warning("📝 Manager name is required to register a new team.")
+                if len(manager_pin) == PIN_LENGTH and manager_name:
+                    if st.button("🚀 Start Drafting", type="primary", use_container_width=True):
+                        st.session_state.confirmed_team_name = team_name
+                        st.session_state.confirmed_mgr_name = manager_name
+                        st.session_state.confirmed_mgr_pin = manager_pin
+                        st.rerun()
+                if not manager_name or len(manager_pin) < PIN_LENGTH:
+                    st.stop()
 
-        if not team_name or len(manager_pin) < PIN_LENGTH:
+        if not team_name or (not is_existing_team and len(manager_pin) < PIN_LENGTH):
             st.stop()
     else:
         team_name = st.session_state.confirmed_team_name
