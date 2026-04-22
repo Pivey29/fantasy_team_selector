@@ -473,7 +473,7 @@ def show_main_interface(is_live):
         # 3. Define Tabs
         # Updated Tab list
         portal_tab, fantasy_tab, standings_tab, matches_tab, spirit_tab = st.tabs([
-            "🛡️ Manager Transfer Portal", "💎 Fantasy Leaderboard", "📅 Match Results", "📊 Standings", "😇 Spirit", 
+            "🛡️ Manager Transfer Portal", "💎 Fantasy Leaderboard", "📊 Standings", "📅 Match Results", "😇 Spirit", 
         ])
 
         with portal_tab:
