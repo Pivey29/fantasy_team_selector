@@ -126,3 +126,39 @@ GRANT ALL ON TABLES TO anon, authenticated, service_role;
 
 -- 9. Refresh API Cache
 NOTIFY pgrst, 'reload schema';
+
+CREATE TABLE dev.matches (
+    id TEXT PRIMARY KEY,
+    division TEXT NOT NULL, -- 'Open' or 'Women'
+    stage TEXT NOT NULL,    -- e.g., 'Pool A', 'Finals'
+    team_a TEXT NOT NULL,
+    team_b TEXT NOT NULL,
+    
+    -- Results
+    score_a INT DEFAULT NULL,
+    score_b INT DEFAULT NULL,
+    
+    -- Spirit Team A (Scores awarded TO Team A by Team B)
+    s_rules_a INT DEFAULT 2,
+    s_fouls_a INT DEFAULT 2,
+    s_fair_a INT DEFAULT 2,
+    s_pos_a INT DEFAULT 2,
+    s_comm_a INT DEFAULT 2,
+    spirit_total_a INT DEFAULT 0,
+    mrp_a TEXT DEFAULT NULL,
+
+    -- Spirit Team B (Scores awarded TO Team B by Team A)
+    s_rules_b INT DEFAULT 2,
+    s_fouls_b INT DEFAULT 2,
+    s_fair_b INT DEFAULT 2,
+    s_pos_b INT DEFAULT 2,
+    s_comm_b INT DEFAULT 2,
+    spirit_total_b INT DEFAULT 0,
+    mrp_b TEXT DEFAULT NULL,
+
+    -- Metadata
+    field TEXT,
+    start_time TIMESTAMP WITH TIME ZONE,
+    status TEXT DEFAULT 'scheduled', -- 'scheduled', 'completed'
+    last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);

@@ -14,6 +14,11 @@ MAX_GENDER_SIZE = 5
 MIN_GENDER_SIZE = 5
 MAX_TEAM_SIZE = 2
 CAPTAIN_MULTIPLIER = 2
+POOL_ASSIGNMENTS = {
+        "Pool A": ["Mutiny", "Wits Rising", "Zephyr", "UFH Simbas", "U20 South Africa"],
+        "Pool B": ["Rex", "Bunnies", "Kaalvoet Kaos", "Maties Ma'Gents", "UCT ManCubs", "Gradient"],
+        "Women": ["Maties Ma'Ladies", "UFH Nalas", "Craft", "Hot Sauce", "Wicked", "Fierce", "UCT Bengals"]
+    }
 
 # --- PLAYER ROLES & SCORING ---
 PLAYER_ROLES = ["handler", "cutter", "hybrid"]
