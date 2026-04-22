@@ -211,6 +211,36 @@ def calculate_standings(df, pool_name):
     # 5. Sort: Wins > PD > Points Scored
     return standings.sort_values(by=['W', 'PD', 'PS'], ascending=False).reset_index(drop=True)
 
+
+def calculate_spirit_standings(df):
+    if df.empty:
+        return pd.DataFrame(columns=["Team", "Avg Spirit", "Games"])
+    
+    spirit_data = []
+    
+    # Process Team A entries
+    for _, row in df.iterrows():
+        if pd.notnull(row['spirit_total_a']):
+            spirit_data.append({"Team": row['team_a'], "Score": row['spirit_total_a']})
+            
+    # Process Team B entries
+    for _, row in df.iterrows():
+        if pd.notnull(row['spirit_total_b']):
+            spirit_data.append({"Team": row['team_b'], "Score": row['spirit_total_b']})
+            
+    if not spirit_data:
+        return pd.DataFrame(columns=["Team", "Avg Spirit", "Games"])
+    
+    # Aggregate
+    spirit_df = pd.DataFrame(spirit_data)
+    standings = spirit_df.groupby("Team")["Score"].agg(['mean', 'count']).reset_index()
+    standings.columns = ["Team", "Avg Spirit", "Games"]
+    
+    # Round to 2 decimal places and sort
+    standings["Avg Spirit"] = standings["Avg Spirit"].round(2)
+    return standings.sort_values(by="Avg Spirit", ascending=False)
+
+
 # --- 5. PHASE: RATINGS ---
 def show_ratings_phase():
     st.title("⭐ Player Self-Ranking Portal")
@@ -441,12 +471,31 @@ def show_main_interface(is_live):
         m_df = pd.DataFrame(match_res.data)
         
         # 3. Define Tabs
-        standings_tab, matches_tab, fantasy_tab, portal_tab = st.tabs([
-            "📊 Standings", 
-            "📅 Match Results", 
-            "💎 Leaderboard", 
-            "🛡️ Manager Portal"
+        # Updated Tab list
+        standings_tab, matches_tab, fantasy_tab, spirit_tab, portal_tab = st.tabs([
+            "📊 Standings", "📅 Results", "💎 Leaderboard", "😇 Spirit", "🛡️ Portal"
         ])
+
+        with spirit_tab:
+            st.subheader("😇 Spirit of the Game Leaderboard")
+            st.caption("Average spirit score received per match (out of 20)")
+            
+            # Filter only for completed matches
+            completed_matches = m_df[m_df['status'] == 'completed']
+            
+            col_s1, col_s2 = st.columns(2)
+            
+            with col_s1:
+                st.markdown("### 💠 Open Division")
+                open_spirit = completed_matches[completed_matches['division'] == 'Open']
+                spirit_df = calculate_spirit_standings(open_spirit)
+                st.table(spirit_df.style.format({"Avg Spirit": "{:.2f}"}))
+                
+            with col_s2:
+                st.markdown("### 🎀 Women's Division")
+                women_spirit = completed_matches[completed_matches['division'] == 'Women']
+                spirit_df_wo = calculate_spirit_standings(women_spirit)
+                st.table(spirit_df_wo.style.format({"Avg Spirit": "{:.2f}"}))
 
         with standings_tab:
             st.subheader("Division Standings")
