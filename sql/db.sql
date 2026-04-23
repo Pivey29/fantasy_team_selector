@@ -49,6 +49,7 @@ CREATE TABLE prd.rosters (
 CREATE TABLE prd.player_scores (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     player_id UUID NOT NULL REFERENCES prd.players(id) ON DELETE CASCADE,
+    match_id TEXT,
     game_datetime TIMESTAMPTZ NOT NULL,
     goals INTEGER DEFAULT 0,
     assists INTEGER DEFAULT 0,
@@ -127,7 +128,7 @@ GRANT ALL ON TABLES TO anon, authenticated, service_role;
 -- 9. Refresh API Cache
 NOTIFY pgrst, 'reload schema';
 
-CREATE TABLE dev.matches (
+CREATE TABLE prd.matches (
     id TEXT PRIMARY KEY,
     division TEXT NOT NULL, -- 'Open' or 'Women'
     stage TEXT NOT NULL,    -- e.g., 'Pool A', 'Finals'

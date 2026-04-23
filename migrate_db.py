@@ -7,7 +7,7 @@ load_dotenv()
 # --- CONFIG ---
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-SCHEMA = "dev"
+SCHEMA = "prd"
 
 # --- SETUP ---
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -26,7 +26,8 @@ def run_migrations():
                 ADD COLUMN IF NOT EXISTS game_number INTEGER,
                 ADD COLUMN IF NOT EXISTS goals INTEGER DEFAULT 0,
                 ADD COLUMN IF NOT EXISTS assists INTEGER DEFAULT 0,
-                ADD COLUMN IF NOT EXISTS callahans INTEGER DEFAULT 0;
+                ADD COLUMN IF NOT EXISTS callahans INTEGER DEFAULT 0,
+                ADD COLUMN IF NOT EXISTS match_id TEXT;
             '''
         }).execute()
 

@@ -1252,6 +1252,14 @@ def show_admin_score_entry():
         selected_id = selected_option.split(":")[0]
         m_row = match_df[match_df['id'].astype(str) == str(selected_id)].iloc[0]
 
+        # Load any previously saved player stats for this match
+        existing_player_stats = {}
+        score_res = conn.client.schema(SCHEMA).table(TABLE_SCORES).select(
+            "player_id, goals, assists, callahans"
+        ).eq("match_id", selected_id).execute()
+        if score_res.data:
+            existing_player_stats = {row['player_id']: row for row in score_res.data}
+
     except Exception as e:
         st.error(f"Error loading schedule: {e}")
         st.stop()
@@ -1264,14 +1272,14 @@ def show_admin_score_entry():
 
     with col_score_a:
         val_a = int(m_row.get('score_a', 0))
-        score_a = st.number_input(f"Score: {m_row['team_a']}", min_value=0, step=1, value=val_a, key=f"score_a_{selected_id}")
+        score_a = st.number_input(f"Score: {m_row['team_a']}", min_value=0, max_value=15, step=1, value=val_a, key=f"score_a_{selected_id}")
 
     with col_vs:
         st.markdown("<h3 style='text-align: center; padding-top: 25px;'>VS</h3>", unsafe_allow_html=True)
 
     with col_score_b:
         val_b = int(m_row.get('score_b', 0))
-        score_b = st.number_input(f"Score: {m_row['team_b']}", min_value=0, step=1, value=val_b, key=f"score_b_{selected_id}")
+        score_b = st.number_input(f"Score: {m_row['team_b']}", min_value=0, max_value=15, step=1, value=val_b, key=f"score_b_{selected_id}")
 
     st.divider()
 
@@ -1298,9 +1306,16 @@ def show_admin_score_entry():
             for _, p in players_a.iterrows():
                 c = st.columns([3, 1, 1, 1])
                 c[0].write(p['name'])
-                g = c[1].number_input("G", 0, 15, 0, key=f"ga_{p['id']}_{selected_id}", label_visibility="collapsed")
-                a = c[2].number_input("A", 0, 15, 0, key=f"aa_{p['id']}_{selected_id}", label_visibility="collapsed")
-                cal = c[3].number_input("C", 0, 15, 0, key=f"ca_{p['id']}_{selected_id}", label_visibility="collapsed")
+                existing = existing_player_stats.get(p['id'], {})
+                g = c[1].number_input(
+                    "G", 0, 15, int(existing.get('goals', 0)), key=f"ga_{p['id']}_{selected_id}", label_visibility="collapsed"
+                )
+                a = c[2].number_input(
+                    "A", 0, 15, int(existing.get('assists', 0)), key=f"aa_{p['id']}_{selected_id}", label_visibility="collapsed"
+                )
+                cal = c[3].number_input(
+                    "C", 0, 15, int(existing.get('callahans', 0)), key=f"ca_{p['id']}_{selected_id}", label_visibility="collapsed"
+                )
                 if g > 0 or a > 0 or cal > 0:
                     all_player_stats.append({"player_id": p['id'], "goals": g, "assists": a,
                                              "callahans": cal, "match_id": selected_id})
@@ -1321,9 +1336,16 @@ def show_admin_score_entry():
             for _, p in players_b.iterrows():
                 c = st.columns([3, 1, 1, 1])
                 c[0].write(p['name'])
-                g = c[1].number_input("G", 0, 20, 0, key=f"gb_{p['id']}_{selected_id}", label_visibility="collapsed")
-                a = c[2].number_input("A", 0, 20, 0, key=f"ab_{p['id']}_{selected_id}", label_visibility="collapsed")
-                cal = c[3].number_input("C", 0, 15, 0, key=f"cb_{p['id']}_{selected_id}", label_visibility="collapsed")
+                existing = existing_player_stats.get(p['id'], {})
+                g = c[1].number_input(
+                    "G", 0, 15, int(existing.get('goals', 0)), key=f"gb_{p['id']}_{selected_id}", label_visibility="collapsed"
+                )
+                a = c[2].number_input(
+                    "A", 0, 15, int(existing.get('assists', 0)), key=f"ab_{p['id']}_{selected_id}", label_visibility="collapsed"
+                )
+                cal = c[3].number_input(
+                    "C", 0, 15, int(existing.get('callahans', 0)), key=f"cb_{p['id']}_{selected_id}", label_visibility="collapsed"
+                )
                 if g > 0 or a > 0 or cal > 0:
                     all_player_stats.append({"player_id": p['id'], "goals": g, "assists": a,
                                              "callahans": cal, "match_id": selected_id})
@@ -1333,31 +1355,49 @@ def show_admin_score_entry():
 
     with team_a_col_2:
         st.markdown(f"#### ⚖️ Spirit FOR Team {target_team_a}")
-        s_rules_a = st.slider("Rules Knowledge", 0, 4, 0, key=f"ra_{selected_id}")
-        s_fouls_a = st.slider("Fouls & Contact", 0, 4, 0, key=f"fa_{selected_id}")
-        s_fair_a  = st.slider("Fair-Mindedness", 0, 4, 0, key=f"fma_{selected_id}")
-        s_pos_a   = st.slider("Attitude", 0, 4, 0, key=f"pa_{selected_id}")
-        s_comm_a  = st.slider("Communication", 0, 4, 0, key=f"ca_{selected_id}")
+        s_rules_a = st.slider("Rules Knowledge", 0, 4, int(m_row.get('s_rules_a') or 0), key=f"ra_{selected_id}")
+        s_fouls_a = st.slider("Fouls & Contact", 0, 4, int(m_row.get('s_fouls_a') or 0), key=f"fa_{selected_id}")
+        s_fair_a  = st.slider("Fair-Mindedness", 0, 4, int(m_row.get('s_fair_a') or 0), key=f"fma_{selected_id}")
+        s_pos_a   = st.slider("Attitude", 0, 4, int(m_row.get('s_pos_a') or 0), key=f"pa_{selected_id}")
+        s_comm_a  = st.slider("Communication", 0, 4, int(m_row.get('s_comm_a') or 0), key=f"ca_{selected_id}")
         
         total_spirit_a = s_rules_a + s_fouls_a + s_fair_a + s_pos_a + s_comm_a
         st.metric(f"Total Spirit {target_team_a}", f"{total_spirit_a}/20")
 
         mrp_options_a = ["None"] + sorted(players_a_mrp['name'].tolist())
-        mrp_a = st.selectbox(f"Most Rated Player {target_team_a}", options=mrp_options_a, key=f"mrp_a_{selected_id}")
+        initial_mrp_a = m_row.get('mrp_a') or "None"
+        if initial_mrp_a and initial_mrp_a not in mrp_options_a:
+            mrp_options_a.insert(0, initial_mrp_a)
+        mrp_a_index = mrp_options_a.index(initial_mrp_a) if initial_mrp_a in mrp_options_a else 0
+        mrp_a = st.selectbox(
+            f"Most Rated Player {target_team_a}",
+            options=mrp_options_a,
+            index=mrp_a_index,
+            key=f"mrp_a_{selected_id}"
+        )
 
     with team_b_col_2:
         st.markdown(f"#### ⚖️ Spirit FOR Team {target_team_b}")
-        s_rules_b = st.slider("Rules Knowledge", 0, 4, 0, key=f"rb_{selected_id}")
-        s_fouls_b = st.slider("Fouls & Contact", 0, 4, 0, key=f"fb_{selected_id}")
-        s_fair_b  = st.slider("Fair-Mindedness", 0, 4, 0, key=f"fmb_{selected_id}")
-        s_pos_b   = st.slider("Attitude", 0, 4, 0, key=f"pb_{selected_id}")
-        s_comm_b  = st.slider("Communication", 0, 4, 0, key=f"cb_{selected_id}")
+        s_rules_b = st.slider("Rules Knowledge", 0, 4, int(m_row.get('s_rules_b') or 0), key=f"rb_{selected_id}")
+        s_fouls_b = st.slider("Fouls & Contact", 0, 4, int(m_row.get('s_fouls_b') or 0), key=f"fb_{selected_id}")
+        s_fair_b  = st.slider("Fair-Mindedness", 0, 4, int(m_row.get('s_fair_b') or 0), key=f"fmb_{selected_id}")
+        s_pos_b   = st.slider("Attitude", 0, 4, int(m_row.get('s_pos_b') or 0), key=f"pb_{selected_id}")
+        s_comm_b  = st.slider("Communication", 0, 4, int(m_row.get('s_comm_b') or 0), key=f"cb_{selected_id}")
 
         total_spirit_b = s_rules_b + s_fouls_b + s_fair_b + s_pos_b + s_comm_b
         st.metric(f"Total Spirit {target_team_b}", f"{total_spirit_b}/20")
 
         mrp_options_b = ["None"] + sorted(players_b_mrp['name'].tolist())
-        mrp_b = st.selectbox(f"Most Rated Player {target_team_b}", options=mrp_options_b, key=f"mrp_b_{selected_id}")
+        initial_mrp_b = m_row.get('mrp_b') or "None"
+        if initial_mrp_b and initial_mrp_b not in mrp_options_b:
+            mrp_options_b.insert(0, initial_mrp_b)
+        mrp_b_index = mrp_options_b.index(initial_mrp_b) if initial_mrp_b in mrp_options_b else 0
+        mrp_b = st.selectbox(
+            f"Most Rated Player {target_team_b}",
+            options=mrp_options_b,
+            index=mrp_b_index,
+            key=f"mrp_b_{selected_id}"
+        )
 
     # --- 7. Unified Save Logic ---
     if st.button("💾 Save Full Match Result", use_container_width=True, type="primary"):
@@ -1378,15 +1418,39 @@ def show_admin_score_entry():
             "status": "completed",
             "last_updated": datetime.now().isoformat()
         }
-        conn.client.schema(SCHEMA).table("matches").upsert(match_payload).execute()
-        
-        if all_player_stats:
-            conn.client.schema(SCHEMA).table(TABLE_SCORES).insert(all_player_stats).execute()
-            
-        st.success("✅ Match results and individual stats saved!")
-        st.balloons()
-        time.sleep(1)
-        st.rerun()
+
+        # Validate match and team totals before saving
+        if score_a > 15 or score_b > 15:
+            st.error("Match scores cannot exceed 15 points per team.")
+        else:
+            player_team = df_players_local.set_index('id')['team'].to_dict()
+            team_goals = {target_team_a: 0, target_team_b: 0}
+            team_assists = {target_team_a: 0, target_team_b: 0}
+            for stat in all_player_stats:
+                team = player_team.get(stat['player_id'])
+                if team == target_team_a:
+                    team_goals[target_team_a] += stat.get('goals', 0)
+                    team_assists[target_team_a] += stat.get('assists', 0)
+                elif team == target_team_b:
+                    team_goals[target_team_b] += stat.get('goals', 0)
+                    team_assists[target_team_b] += stat.get('assists', 0)
+
+            if team_goals[target_team_a] > 15 or team_goals[target_team_b] > 15:
+                st.error("Total goals per team cannot exceed 15.")
+            elif team_assists[target_team_a] > 15 or team_assists[target_team_b] > 15:
+                st.error("Total assists per team cannot exceed 15.")
+            else:
+                conn.client.schema(SCHEMA).table("matches").upsert(match_payload).execute()
+
+                # Replace any existing player stats for this match to avoid duplicates
+                conn.client.schema(SCHEMA).table(TABLE_SCORES).delete().eq("match_id", selected_id).execute()
+                if all_player_stats:
+                    conn.client.schema(SCHEMA).table(TABLE_SCORES).insert(all_player_stats).execute()
+                    
+                st.success("✅ Match results and individual stats saved!")
+                st.balloons()
+                time.sleep(1)
+                st.rerun()
 
 # --- MAIN ROUTER ---
 # Check for admin access via URL parameter
