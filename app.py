@@ -241,6 +241,22 @@ def calculate_spirit_standings(df):
     return standings.sort_values(by="Avg Spirit", ascending=False)
 
 
+def get_mrp_leaderboard(m_df):
+    # Combine MRP nominations from both Team A and Team B columns
+    mrp_nominations = pd.concat([
+        m_df['mrp_a'], 
+        m_df['mrp_b']
+    ])
+    
+    # Filter out "None" or empty entries
+    mrp_counts = mrp_nominations[
+        (mrp_nominations.notnull()) & (mrp_nominations != "None")
+    ].value_counts().reset_index()
+    
+    mrp_counts.columns = ['Player', 'Nominations']
+    return mrp_counts.head(10) # Return Top 10
+
+
 # --- 5. PHASE: RATINGS ---
 def show_ratings_phase():
     st.title("⭐ Player Self-Ranking Portal")
@@ -520,20 +536,36 @@ def show_main_interface(is_live):
             
             # Filter only for completed matches
             completed_matches = m_df[m_df['status'] == 'completed']
+            col_open, col_women = st.columns(2)
             
-            col_s1, col_s2 = st.columns(2)
-            
-            with col_s1:
-                st.markdown("### 💠 Open Division")
+            with col_open:
+                st.markdown("### Open Division")
                 open_spirit = completed_matches[completed_matches['division'] == 'Open']
                 spirit_df = calculate_spirit_standings(open_spirit)
                 st.table(spirit_df.style.format({"Avg Spirit": "{:.2f}"}))
+
+                st.write("**Top 10 Rated Players (MRP)**")
+                open_mrp = get_mrp_leaderboard(open_spirit)
+                if not open_mrp.empty:
+                    st.dataframe(open_mrp, use_container_width=True, hide_index=True)
+                else:
+                    st.caption("No MRP votes yet.")                
                 
-            with col_s2:
-                st.markdown("### 🎀 Women's Division")
+            with col_women:
+                st.markdown("### Women's Division")
                 women_spirit = completed_matches[completed_matches['division'] == 'Women']
                 spirit_df_wo = calculate_spirit_standings(women_spirit)
                 st.table(spirit_df_wo.style.format({"Avg Spirit": "{:.2f}"}))
+
+                # MRP Standings
+                st.write("**Top 10 Rated Players (MRP)**")
+                women_mrp = get_mrp_leaderboard(women_spirit)
+                if not women_mrp.empty:
+                    st.dataframe(women_mrp, use_container_width=True, hide_index=True)
+                else:
+                    st.caption("No MRP votes yet.")                
+
+            st.divider()
 
         with standings_tab:
             st.subheader("Division Standings")
@@ -556,7 +588,7 @@ def show_main_interface(is_live):
             completed = m_df[m_df['status'] == 'completed'].sort_values(by='last_updated', ascending=False)
             if not completed.empty:
                 for _, row in completed.iterrows():
-                    st.write(f"**{row['stage']}**: {row['team_a']} **{round(row['score_a'], 0)} - {round(row['score_b'], 0)}** {row['team_b']}")
+                    st.write(f"**{row['stage']}**: {row['team_a']} **{int(round(row['score_a'], 0))} - {int(round(row['score_b'], 0))}** {row['team_b']}")
             else:
                 st.info("No matches completed yet.")
 
