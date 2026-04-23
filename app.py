@@ -3,7 +3,7 @@ import textwrap
 import pandas as pd
 import pytz
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from st_supabase_connection import SupabaseConnection
 
 # --- 1. SETTINGS & CONFIG --- 
@@ -346,14 +346,7 @@ def get_processed_results(conn):
             select_cols = "player_id, goals, assists, callahans"
         else:
             select_cols = "player_id, points_earned"
-        supports_game_datetime = False
-        try:
-            conn.client.schema(SCHEMA).table(TABLE_SCORES).select("game_datetime").limit(1).execute()
-            supports_game_datetime = True
-            select_cols += ", game_datetime"
-        except Exception:
-            if supports_day_number:
-                select_cols += ", day_number"
+        select_cols += ", match_id"
 
         score_res = (conn.client.schema(SCHEMA)
                      .table(TABLE_SCORES)
@@ -384,14 +377,16 @@ def get_processed_results(conn):
         else:
             df_scores = pd.DataFrame(score_res.data)
 
-        # Compute the game datetime for each score row
-        if 'game_datetime' in df_scores.columns:
-            df_scores['game_datetime'] = pd.to_datetime(df_scores['game_datetime'], utc=True)
-        elif 'day_number' in df_scores.columns:
-            df_scores['day_number'] = df_scores['day_number'].fillna(1).astype(int)
-            df_scores['game_datetime'] = df_scores['day_number'].apply(
-                lambda d: TOURNAMENT_START_DT + timedelta(days=max(0, d - 1))
+        # Compute the game datetime by joining player_scores with matches via match_id
+        match_time_res = conn.client.schema(SCHEMA).table("matches").select("id, start_time").execute()
+        if match_time_res.data and 'match_id' in df_scores.columns:
+            df_match_times = pd.DataFrame(match_time_res.data).rename(columns={"id": "match_id"})
+            df_scores['match_id'] = df_scores['match_id'].apply(
+                lambda x: None if pd.isna(x) else str(int(x)) if isinstance(x, float) else str(x)
             )
+            df_match_times['match_id'] = df_match_times['match_id'].astype(str)
+            df_scores = df_scores.merge(df_match_times[["match_id", "start_time"]], on="match_id", how="left")
+            df_scores['game_datetime'] = pd.to_datetime(df_scores['start_time'], utc=True)
         else:
             df_scores['game_datetime'] = TOURNAMENT_START_DT
 
