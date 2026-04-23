@@ -72,29 +72,11 @@ def render_manager_portal_logic():
     # Put your specific player selection logic here
     # Example:
     st.write("---")
-    st.info("💡 You can make transfers here until the next round starts.")
+    st.info("💡 You can make transfers here.")
     
     # YOUR EXISTING TRANSFER CODE GOES HERE:
     # (The multiselects, the budget checks, the position limits, etc.)
 
-    # --- FOOTER ACTIONS ---
-    st.divider()
-    col_out, col_save = st.columns([1, 3])
-    
-    with col_out:
-        if st.button("🚪 Logout"):
-            # Clear session state
-            for key in ['confirmed_team_name', 'manager_id', 'roster_selection']:
-                if key in st.session_state:
-                    del st.session_state[key]
-            st.rerun()
-
-    with col_save:
-        if st.button("💾 Save Transfers & Update Roster", type="primary", use_container_width=True):
-            # Your Supabase update logic here
-            # push_roster_to_supabase()
-            st.session_state['update_success'] = True
-            st.rerun()
 
 
 # --- 2. PAGE CONFIG ---
@@ -823,8 +805,12 @@ def show_main_interface(is_live):
                     st.caption(f"Used: {st.session_state.auth_user.get('transfers_used', 0)}/{MAX_PLAYER_TRANSFERS} Transfers, {st.session_state.auth_user.get('captain_changes_used', 0)}/{MAX_CAPTAIN_CHANGES} Captain Changes")
             
             # 2. Show Current Roster
+            full_data = pd.DataFrame()
+            if is_live:
+                _, full_data = get_processed_results(conn)
             with st.expander("📋 Your Roster", expanded=True):
-                if is_live and 'full_data' in locals() and not full_data.empty:
+                if is_live and not full_data.empty:
+                    print("DEBUG 2")
                     my_points = full_data[full_data['manager_id'] == m_id] if m_id else pd.DataFrame()
                     if not my_points.empty:
                         _display = my_points[['player_name', 'points_earned', 'is_captain', 'player_role', 'calc_pts', 'valid_from', 'valid_to']].copy()
