@@ -7,7 +7,7 @@ from datetime import datetime
 TOURNAMENT_NAME = "OW Nationals 2026 - Fantasy Draft"
 DIV_OPEN_LABEL = "opens"
 DIV_WOMEN_LABEL = "womens"
-SCHEMA = "dev"
+SCHEMA = "prd"
 ROSTER_SIZE= 10
 BUDGET_LIMIT = 100
 MAX_GENDER_SIZE = 5

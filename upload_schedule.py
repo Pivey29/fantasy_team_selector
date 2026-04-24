@@ -1,8 +1,8 @@
-import pandas as pd
 from datetime import datetime
 import pytz
 from st_supabase_connection import SupabaseConnection
 import streamlit as st
+from config import SCHEMA
 
 # Connect to Supabase
 conn = st.connection("supabase", type=SupabaseConnection)
@@ -123,8 +123,8 @@ def upload_full_schedule():
     
     try:
         # Upsert allows you to run this multiple times if you need to fix a typo
-        res = conn.client.schema("dev").table("matches").upsert(batch).execute()
-        print(f"Successfully uploaded {len(res.data)} match slots to dev.matches!")
+        res = conn.client.schema(SCHEMA).table("matches").upsert(batch).execute()
+        print(f"Successfully uploaded {len(res.data)} match slots to {SCHEMA}.matches!")
     except Exception as e:
         print(f"Upload failed: {e}")
 
