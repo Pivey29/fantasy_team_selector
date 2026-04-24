@@ -521,7 +521,7 @@ def show_main_interface(is_live):
                 spirit_df = calculate_spirit_standings(open_spirit)
                 st.table(spirit_df.style.format({"Avg Spirit": "{:.2f}"}))
 
-                st.write("**Top 10 Rated Players (MRP)**")
+                st.write("**Top 10 Most Respcted Players (MRP)**")
                 open_mrp = get_mrp_leaderboard(open_spirit)
                 if not open_mrp.empty:
                     st.dataframe(open_mrp, use_container_width=True, hide_index=True)
@@ -535,7 +535,7 @@ def show_main_interface(is_live):
                 st.table(spirit_df_wo.style.format({"Avg Spirit": "{:.2f}"}))
 
                 # MRP Standings
-                st.write("**Top 10 Rated Players (MRP)**")
+                st.write("**Top 10 Most Respcted Players (MRP)**")
                 women_mrp = get_mrp_leaderboard(women_spirit)
                 if not women_mrp.empty:
                     st.dataframe(women_mrp, use_container_width=True, hide_index=True)
@@ -1383,7 +1383,7 @@ def show_admin_score_entry():
             mrp_options_a.insert(0, initial_mrp_a)
         mrp_a_index = mrp_options_a.index(initial_mrp_a) if initial_mrp_a in mrp_options_a else 0
         mrp_a = st.selectbox(
-            f"Most Rated Player {target_team_a}",
+            f"Most Respected Player {target_team_a}",
             options=mrp_options_a,
             index=mrp_a_index,
             key=f"mrp_a_{selected_id}"
@@ -1406,7 +1406,7 @@ def show_admin_score_entry():
             mrp_options_b.insert(0, initial_mrp_b)
         mrp_b_index = mrp_options_b.index(initial_mrp_b) if initial_mrp_b in mrp_options_b else 0
         mrp_b = st.selectbox(
-            f"Most Rated Player {target_team_b}",
+            f"Most Respected Player {target_team_b}",
             options=mrp_options_b,
             index=mrp_b_index,
             key=f"mrp_b_{selected_id}"
