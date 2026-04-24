@@ -545,7 +545,7 @@ def show_main_interface(is_live):
             st.divider()
 
         with standings_tab:
-            st.subheader("Division Standings")
+            st.subheader("Open's Division")
             col_a, col_b = st.columns(2)
             open_matches = m_df[m_df['division'] == 'Open']
             with col_a:
@@ -556,7 +556,7 @@ def show_main_interface(is_live):
                 st.table(calculate_standings(open_matches[open_matches['stage'].str.contains("Pool B", na=False)], pool_name="Pool B"))
             
             st.markdown("---")
-            st.markdown("### 🎀 Women's Division")
+            st.markdown("### Women's Division")
             women_rr = m_df[(m_df['division'] == 'Women') & (m_df['stage'] == 'Women RR')]
             st.table(calculate_standings(women_rr, pool_name="Women"))
 

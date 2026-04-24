@@ -30,81 +30,80 @@ def get_div(team_a, stage):
 
 # (ID, Time, Field, Team A, Team B, Stage)
 raw_schedule = [
+    # --- FRIDAY APRIL 24 ---
+    ("001", "2026-04-24 19:00", "F1", "Hot Sauce", "UCT Bengals", "Women RR"),
+    ("002", "2026-04-24 19:00", "F2", "Mutiny", "Zephyr", "Pool A"),
+
     # --- SATURDAY APRIL 25 ---
-    ("101", "2026-04-25 08:30+02", "F1", "Mutiny", "Wits Rising", "Pool A"),
-    ("102", "2026-04-25 08:30+02", "F2", "U20 South Africa", "UFH Simbas", "Pool A"),
-    ("103", "2026-04-25 08:30+02", "F3", "UCT Bengals", "Maties Ma'Ladies", "Women RR"),
-    ("104", "2026-04-25 08:30+02", "F4", "UFH Nalas", "Craft", "Women RR"),
-    ("105", "2026-04-25 08:30+02", "F5", "Hot Sauce", "Wicked", "Women RR"),
-    
-    ("106", "2026-04-25 11:00+02", "F1", "Bunnies", "UCT Mancubs", "Pool B"),
-    ("107", "2026-04-25 11:00+02", "F2", "Kaalvoet Kaos", "Maties Ma'Gents", "Pool B"),
-    ("108", "2026-04-25 11:00+02", "F3", "Rex", "Gradient", "Pool B"),
-    ("109", "2026-04-25 11:00+02", "F4", "Wicked", "Fierce", "Women RR"),
-    ("110", "2026-04-25 11:00+02", "F5", "Maties Ma'Ladies", "UFH Nalas", "Women RR"),
-    
-    ("111", "2026-04-25 13:30+02", "F1", "UCT Bengals", "Craft", "Women RR"),
-    ("112", "2026-04-25 13:30+02", "F2", "U20 South Africa", "Zephyr", "Pool A"),
-    ("113", "2026-04-25 13:30+02", "F3", "UFH Simbas", "Wits Rising", "Pool A"),
-    ("114", "2026-04-25 13:30+02", "F4", "Bunnies", "Maties Ma'Gents", "Pool B"),
-    ("115", "2026-04-25 13:30+02", "F5", "Rex", "UCT Mancubs", "Pool B"),
-    
-    ("116", "2026-04-25 16:00+02", "F1", "Kaalvoet Kaos", "Gradient", "Pool B"),
-    ("117", "2026-04-25 16:00+02", "F2", "Zephyr", "Wits Rising", "Pool A"),
-    ("118", "2026-04-25 16:00+02", "F3", "Mutiny", "UFH Simbas", "Pool A"),
-    ("119", "2026-04-25 16:00+02", "F4", "Wicked", "Maties Ma'Ladies", "Women RR"),
-    ("120", "2026-04-25 16:00+02", "F5", "UFH Nalas", "Fierce", "Women RR"),
-    ("121", "2026-04-25 16:00+02", "F6", "Hot Sauce", "UCT Bengals", "Women RR"),
-    ("122", "2026-04-25 16:00+02", "F7", "UCT Mancubs", "Maties Ma'Gents", "Pool B"),
-    
-    ("123", "2026-04-25 18:30+02", "F1", "Bunnies", "Gradient", "Pool B"),
-    ("124", "2026-04-25 18:30+02", "F2", "Rex", "Kaalvoet Kaos", "Pool B"),
+    ("101", "2026-04-25 08:30", "F1", "Maties Ma'Ladies", "Fierce", "Women RR"),
+    ("102", "2026-04-25 08:30", "F2", "Inyhwagi", "Gradient", "Pool B"),
+    ("103", "2026-04-25 08:30", "F3", "Rex", "Maties Ma'Gents", "Pool B"),
+    ("104", "2026-04-25 08:30", "F4", "Bunnies", "UCT Mancubs", "Pool B"),
+    ("105", "2026-04-25 08:30", "F5", "UCT Bengals", "UFH Nalas", "Women RR"),
+    ("106", "2026-04-25 08:30", "F6", "Hot Sauce", "Craft", "Women RR"),
+    ("107", "2026-04-25 08:30", "F7", "Mutiny", "Kaalvoet Kaos", "Pool A"),
+
+    ("108", "2026-04-25 11:00", "F1", "UFH Nalas", "Craft", "Women RR"),
+    ("109", "2026-04-25 11:00", "F2", "Mutiny", "Wits Rising", "Pool A"),
+    ("110", "2026-04-25 11:00", "F3", "Bunnies", "Inyhwagi", "Pool B"),
+    ("111", "2026-04-25 11:00", "F4", "UCT Bengals", "Maties Ma'Ladies", "Women RR"),
+    ("112", "2026-04-25 11:00", "F5", "Hot Sauce", "Wicked", "Women RR"),
+
+    ("113", "2026-04-25 13:30", "F1", "Zephyr", "UFH Simbas", "Pool A"),
+    ("114", "2026-04-25 13:30", "F2", "Rex", "Gradient", "Pool B"),
+    ("115", "2026-04-25 13:30", "F3", "UCT Mancubs", "Maties Ma'Gents", "Pool B"),
+    ("116", "2026-04-25 13:30", "F4", "Hot Sauce", "Fierce", "Women RR"),
+    ("117", "2026-04-25 13:30", "F5", "Kaalvoet Kaos", "Wits Rising", "Pool A"),
+
+    ("118", "2026-04-25 16:00", "F1", "Rex", "Bunnies", "Pool B"),
+    ("119", "2026-04-25 16:00", "F2", "Wicked", "Fierce", "Women RR"),
+    ("120", "2026-04-25 16:00", "F3", "Maties Ma'Gents", "Gradient", "Pool B"),
+    ("121", "2026-04-25 16:00", "F4", "Maties Ma'Ladies", "UFH Nalas", "Women RR"),
+    ("122", "2026-04-25 16:00", "F5", "Mutiny", "UFH Simbas", "Pool A"),
+    ("123", "2026-04-25 16:00", "F6", "UCT Bengals", "Craft", "Women RR"),
+    ("124", "2026-04-25 16:00", "F7", "Inyhwagi", "UCT Mancubs", "Pool B"),
+
+    ("125", "2026-04-25 18:30", "F1", "Zephyr", "Kaalvoet Kaos", "Pool A"),
+    ("126", "2026-04-25 18:30", "F2", "UFH Simbas", "Wits Rising", "Pool A"),
 
     # --- SUNDAY APRIL 26 ---
-    ("201", "2026-04-26 08:30+02", "F1", "U20 South Africa", "Wits Rising", "Pool A"),
-    ("202", "2026-04-26 08:30+02", "F2", "Hot Sauce", "Fierce", "Women RR"),
-    ("203", "2026-04-26 08:30+02", "F3", "UCT Bengals", "UFH Nalas", "Women RR"),
-    ("204", "2026-04-26 08:30+02", "F4", "Mutiny", "Zephyr", "Pool A"),
-    ("205", "2026-04-26 08:30+02", "F5", "Maties Ma'Ladies", "Craft", "Women RR"),
-    
-    ("206", "2026-04-26 11:00+02", "F1", "Rex", "Maties Ma'Gents", "Pool B"),
-    ("207", "2026-04-26 11:00+02", "F2", "Hot Sauce", "Maties Ma'Ladies", "Women RR"),
-    ("208", "2026-04-26 11:00+02", "F3", "UCT Mancubs", "Gradient", "Pool B"),
-    ("209", "2026-04-26 11:00+02", "F4", "UCT Bengals", "Fierce", "Women RR"),
-    ("210", "2026-04-26 11:00+02", "F5", "Bunnies", "Kaalvoet Kaos", "Pool B"),
-    
-    ("211", "2026-04-26 13:30+02", "F1", "Zephyr", "UFH Simbas", "Pool A"),
-    ("212", "2026-04-26 13:30+02", "F2", "Wicked", "Craft", "Women RR"),
-    ("213", "2026-04-26 13:30+02", "F3", "Kaalvoet Kaos", "UCT Mancubs", "Pool B"),
-    ("214", "2026-04-26 13:30+02", "F4", "Bunnies", "Rex", "Pool B"),
-    ("215", "2026-04-26 13:30+02", "F5", "Mutiny", "U20 South Africa", "Pool A"),
-    
-    ("216", "2026-04-26 16:00+02", "F1", "Wicked", "UFH Nalas", "Women RR"),
-    ("217", "2026-04-26 16:00+02", "F2", "Maties Ma'Ladies", "Fierce", "Women RR"),
-    ("218", "2026-04-26 16:00+02", "F3", "Hot Sauce", "Craft", "Women RR"),
-    ("219", "2026-04-26 16:00+02", "F4", "Maties Ma'Gents", "Gradient", "Pool B"),
-    
-    ("220", "2026-04-26 18:30+02", "F1", "A2", "B1", "SF2 (1-4)"),
-    ("221", "2026-04-26 18:30+02", "F2", "A1", "B2", "SF1 (1-4)"),
+    ("201", "2026-04-26 07:30", "F1", "UCT Mancubs", "Gradient", "Pool B"),
+    ("202", "2026-04-26 07:30", "F2", "Rex", "Inyhwagi", "Pool B"),
+    ("203", "2026-04-26 07:30", "F3", "Hot Sauce", "Maties Ma'Ladies", "Women RR"),
+    ("204", "2026-04-26 07:30", "F4", "Wicked", "Craft", "Women RR"),
+    ("205", "2026-04-26 07:30", "F5", "Bunnies", "Maties Ma'Gents", "Pool B"),
+    ("206", "2026-04-26 07:30", "F6", "Kaalvoet Kaos", "UFH Simbas", "Pool A"),
+    ("207", "2026-04-26 07:30", "F7", "UCT Bengals", "Fierce", "Women RR"),
+    ("208", "2026-04-26 07:30", "F8", "Zephyr", "Wits Rising", "Pool A"),
+
+    ("209", "2026-04-26 09:10", "F1", "Inyhwagi", "Maties Ma'Gents", "Pool B"),
+    ("210", "2026-04-26 09:10", "F2", "Bunnies", "Gradient", "Pool B"),
+    ("211", "2026-04-26 09:10", "F3", "Wicked", "UFH Nalas", "Women RR"),
+    ("212", "2026-04-26 09:10", "F4", "Maties Ma'Ladies", "Craft", "Women RR"),
+    ("213", "2026-04-26 09:10", "F5", "Rex", "UCT Mancubs", "Pool B"),
 
     # --- MONDAY APRIL 27 ---
-    ("30+021", "2026-04-27 08:30+02", "F1", "UCT Bengals", "Wicked", "Women RR"),
-    ("30+022", "2026-04-27 08:30+02", "F2", "Hot Sauce", "UFH Nalas", "Women RR"),
-    ("30+023", "2026-04-27 08:30+02", "F3", "A3", "B4", "SF3 (5-8)"),
-    ("30+024", "2026-04-27 08:30+02", "F4", "A4", "B3", "SF4 (5-8)"),
-    
-    ("30+025", "2026-04-27 11:00+02", "F1", "Winner SF1", "Winner SF2", "Open Final"),
-    ("30+026", "2026-04-27 11:00+02", "F2", "Fierce", "Craft", "Women RR"),
-    ("30+027", "2026-04-27 11:00+02", "F3", "A5", "B6", "Open 9-11 RR"),
-    
-    ("30+028", "2026-04-27 13:30+02", "F1", "Women 1st", "Women 2nd", "Women Final"),
-    ("30+029", "2026-04-27 13:30+02", "F2", "Loser SF1", "Loser SF2", "Open 3rd Place"),
-    ("310", "2026-04-27 13:30+02", "F3", "Winner SF3", "Winner SF4", "Open 5th Place"),
-    ("311", "2026-04-27 13:30+02", "F4", "A5", "B5", "Open 9-11 RR"),
+    ("301", "2026-04-27 08:30", "F1", "SF 1", "SF 1", "Open SF"),
+    ("302", "2026-04-27 08:30", "F2", "SF 2", "SF 2", "Open SF"),
+    ("303", "2026-04-27 08:30", "F3", "TBC", "TBC", "Open 5-8 SF"),
+    ("304", "2026-04-27 08:30", "F4", "UFH Nalas", "Fierce", "Women RR"),
+    ("305", "2026-04-27 08:30", "F5", "Wicked", "Maties Ma'Ladies", "Women RR"),
+    ("306", "2026-04-27 08:30", "F6", "TBC", "TBC", "Open 5-8 SF"),
+
+    ("307", "2026-04-27 11:00", "F1", "UCT Bengals", "Wicked", "Women RR"),
+    ("308", "2026-04-27 11:00", "F2", "TBC", "TBC", "Open 7th Place"),
+    ("309", "2026-04-27 11:00", "F3", "A5", "B6", "Open 9-11 RR"),
+    ("310", "2026-04-27 11:00", "F4", "Hot Sauce", "UFH Nalas", "Women RR"),
+    ("311", "2026-04-27 11:00", "F5", "Fierce", "Craft", "Women RR"),
+
+    ("312", "2026-04-27 13:30", "F1", "Women 1st", "Women 2nd", "Women Final"),
+    ("313", "2026-04-27 13:30", "F2", "Open Final", "Open Final", "Open Final"),
+    ("314", "2026-04-27 13:30", "F3", "TBC", "TBC", "Open 3rd Place"),
+    ("315", "2026-04-27 13:30", "F4", "TBC", "TBC", "Open 5th Place"),
+    ("316", "2026-04-27 13:30", "F5", "A5", "B5", "Open 9-11 RR"),
 ]
 
 def upload_full_schedule():
-    sast = pytz.timezone('Africa/Johannesburg')
     batch = []
     
     for mid, t_str, fld, ta, tb, stg in raw_schedule:
@@ -125,9 +124,9 @@ def upload_full_schedule():
     try:
         # Upsert allows you to run this multiple times if you need to fix a typo
         res = conn.client.schema("dev").table("matches").upsert(batch).execute()
-        st.success(f"Successfully uploaded {len(res.data)} match slots to dev.matches!")
+        print(f"Successfully uploaded {len(res.data)} match slots to dev.matches!")
     except Exception as e:
-        st.error(f"Upload failed: {e}")
+        print(f"Upload failed: {e}")
 
 if __name__ == "__main__":
     upload_full_schedule()
