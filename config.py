@@ -34,7 +34,7 @@ ROLE_MULTIPLIERS = {
 }
 
 PIN_LENGTH = 4
-MAX_PLAYER_TRANSFERS = 5
+MAX_PLAYER_TRANSFERS = 4
 ADMIN_PIN = "1234"  # Change this to your secure admin PIN
 MAX_CAPTAIN_CHANGES = 2
 # tables names from DB
