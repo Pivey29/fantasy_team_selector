@@ -1331,7 +1331,8 @@ def show_admin_score_entry():
                 )
                 if g > 0 or a > 0 or cal > 0:
                     all_player_stats.append({"player_id": p['id'], "goals": g, "assists": a,
-                                             "callahans": cal, "match_id": selected_id})
+                                             "callahans": cal, "match_id": selected_id,
+                                             "game_datetime": m_row['start_time']})
 
     # --- TEAM B COLUMN ---
     with team_b_col:
@@ -1361,7 +1362,8 @@ def show_admin_score_entry():
                 )
                 if g > 0 or a > 0 or cal > 0:
                     all_player_stats.append({"player_id": p['id'], "goals": g, "assists": a,
-                                             "callahans": cal, "match_id": selected_id})
+                                             "callahans": cal, "match_id": selected_id,
+                                             "game_datetime": m_row['start_time']})
     st.divider()
 
     team_a_col_2, team_b_col_2 = st.columns(2)
