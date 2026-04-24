@@ -521,7 +521,7 @@ def show_main_interface(is_live):
                 spirit_df = calculate_spirit_standings(open_spirit)
                 st.table(spirit_df.style.format({"Avg Spirit": "{:.2f}"}))
 
-                st.write("**Top 10 Most Respcted Players (MRP)**")
+                st.write("**Top 10 Most Respected Players (MRP)**")
                 open_mrp = get_mrp_leaderboard(open_spirit)
                 if not open_mrp.empty:
                     st.dataframe(open_mrp, use_container_width=True, hide_index=True)
