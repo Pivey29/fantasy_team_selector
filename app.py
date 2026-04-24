@@ -20,17 +20,64 @@ from config import (
     CAPTAIN_MULTIPLIER,
     MIN_GENDER_SIZE,
     PIN_LENGTH,
+    ADMIN_PIN,
     TABLE_MANAGERS,
     TABLE_PLAYERS,
     TABLE_ROSTERS,
     TABLE_SCORES,
     SCHEMA,
     DRAFT_END_DT,
+    TOURNAMENT_START_DT,
     get_current_stage,
     PLAYER_ROLES,
     ROLE_MULTIPLIERS,
-    ROLE_DESCRIPTIONS
+    POOL_ASSIGNMENTS
 )
+
+
+def render_manager_portal_logic():
+    """
+    Handles authentication, team selection, and transfer logic.
+    Works inside a tab or as a standalone page.
+    """
+    # 1. AUTHENTICATION CHECK
+    # We use 'manager_id' or 'confirmed_team_name' as the 'logged in' flag
+    if not st.session_state.get('confirmed_team_name'):
+        st.info("🔐 Please log in to manage your roster.")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            m_name = st.text_input("Manager Name", key="portal_user").strip()
+        with col2:
+            m_pin = st.text_input("4-Digit PIN", type="password", key="portal_pin", max_chars=4)
+
+        # Logic for the "Hit Enter" hint
+        if len(m_pin) == 4 and m_name:
+            # This is where your actual validation logic lives
+            # We fetch from Supabase to check if manager exists
+            if st.button("🔓 Access My Team", type="primary", use_container_width=True):
+                # Replace with your actual verification function
+                # res = conn.client.schema(SCHEMA).table(TABLE_MANAGERS).select("*").eq("name", m_name).eq("pin", m_pin).execute()
+                # if res.data:
+                st.session_state['confirmed_team_name'] = m_name 
+                st.rerun()
+        return # Stop here if not logged in
+
+    # 2. MANAGER IS LOGGED IN
+    team_name = st.session_state.get('confirmed_team_name')
+    
+    st.markdown(f"### 🏟️ Managing: **{team_name}**")
+    
+    # --- ROSTER / TRANSFER INTERFACE ---
+    # Put your specific player selection logic here
+    # Example:
+    st.write("---")
+    st.info("💡 You can make transfers here.")
+    
+    # YOUR EXISTING TRANSFER CODE GOES HERE:
+    # (The multiselects, the budget checks, the position limits, etc.)
+
+
 
 # --- 2. PAGE CONFIG ---
 st.set_page_config(page_title=TOURNAMENT_NAME, page_icon="🏆", layout="wide")
@@ -74,6 +121,8 @@ if 'manager_id' not in st.session_state: st.session_state.manager_id = None
 if 'auth_key' not in st.session_state: st.session_state.auth_key = None
 if 'confirmed_team_name' not in st.session_state: st.session_state.confirmed_team_name = None
 if 'rank_form_v' not in st.session_state: st.session_state.rank_form_v = 0
+if 'admin_auth' not in st.session_state: st.session_state.admin_auth = False
+if 'admin_team_selected' not in st.session_state: st.session_state.admin_team_selected = None
 
 # Global Data Load
 df_players = load_player_data()
@@ -85,6 +134,110 @@ def load_team_names():
     return [m['team_name'] for m in res.data if m.get('team_name')]
 
 all_team_names = load_team_names()
+
+
+def calculate_standings(df, pool_name):
+    """
+    Processes match rows for a specific group (Pool A, Pool B, or Women RR).
+    Includes safety checks to prevent 'Length mismatch' errors.
+    """
+    # Get target teams, default to empty list if key not found
+    target_teams = POOL_ASSIGNMENTS.get(pool_name, [])
+    
+    # SAFETY: If the pool_name is wrong, don't crash, just return an empty table
+    if not target_teams:
+        print(f"I GET stuck here.")
+        return pd.DataFrame(columns=['Team', 'P', 'W', 'L', 'D', 'PS', 'PA', 'PD'])
+
+    # 2. Initialize stats
+    stats = {team: {'P': 0, 'W': 0, 'L': 0, 'D': 0, 'PS': 0, 'PA': 0} for team in target_teams}
+
+    # 3. Process matches
+    if df is not None and not df.empty:
+        for _, row in df.iterrows():
+            # Check for completed scores (handle both None and NaN)
+            score_a = row.get('score_a')
+            score_b = row.get('score_b')
+            
+            if pd.notna(score_a) and pd.notna(score_b):
+                for side in ['a', 'b']:
+                    team = str(row[f'team_{side}']).strip()
+                    opp_side = 'b' if side == 'a' else 'a'
+                    
+                    if team in stats:
+                        stats[team]['P'] += 1
+                        stats[team]['PS'] += int(row[f'score_{side}'])
+                        stats[team]['PA'] += int(row[f'score_{opp_side}'])
+                        
+                        if row[f'score_{side}'] > row[f'score_{opp_side}']: 
+                            stats[team]['W'] += 1
+                        elif row[f'score_{side}'] < row[f'score_{opp_side}']: 
+                            stats[team]['L'] += 1
+                        else: 
+                            stats[team]['D'] += 1
+
+    # 4. Create DataFrame
+    # By using list(stats.values()), we ensure Pandas sees the rows correctly
+    standings = pd.DataFrame.from_dict(stats, orient='index').reset_index()
+    
+    # If for some reason standings is still empty, return the empty columns
+    if standings.empty:
+        return pd.DataFrame(columns=['Team', 'P', 'W', 'L', 'D', 'PS', 'PA', 'PD'])
+
+    # Rename columns explicitly
+    standings.columns = ['Team', 'P', 'W', 'L', 'D', 'PS', 'PA']
+    
+    # Calculate PD
+    standings['PD'] = standings['PS'] - standings['PA']
+    
+    # 5. Sort: Wins > PD > Points Scored
+    return standings.sort_values(by=['W', 'PD', 'PS'], ascending=False).reset_index(drop=True)
+
+
+def calculate_spirit_standings(df):
+    if df.empty:
+        return pd.DataFrame(columns=["Team", "Avg Spirit", "Games"])
+    
+    spirit_data = []
+    
+    # Process Team A entries
+    for _, row in df.iterrows():
+        if pd.notnull(row['spirit_total_a']):
+            spirit_data.append({"Team": row['team_a'], "Score": row['spirit_total_a']})
+            
+    # Process Team B entries
+    for _, row in df.iterrows():
+        if pd.notnull(row['spirit_total_b']):
+            spirit_data.append({"Team": row['team_b'], "Score": row['spirit_total_b']})
+            
+    if not spirit_data:
+        return pd.DataFrame(columns=["Team", "Avg Spirit", "Games"])
+    
+    # Aggregate
+    spirit_df = pd.DataFrame(spirit_data)
+    standings = spirit_df.groupby("Team")["Score"].agg(['mean', 'count']).reset_index()
+    standings.columns = ["Team", "Avg Spirit", "Games"]
+    
+    # Round to 2 decimal places and sort
+    standings["Avg Spirit"] = standings["Avg Spirit"].round(2)
+    return standings.sort_values(by="Avg Spirit", ascending=False)
+
+
+def get_mrp_leaderboard(m_df):
+    # Combine MRP nominations from both Team A and Team B columns
+    mrp_nominations = pd.concat([
+        m_df['mrp_a'], 
+        m_df['mrp_b']
+    ])
+    
+    # Filter out "None" or empty entries
+    mrp_counts = mrp_nominations[
+        (mrp_nominations.notnull()) & (mrp_nominations != "None")
+    ].value_counts().reset_index()
+    
+    mrp_counts.columns = ['Player', 'Nominations']
+    return mrp_counts.head(10) # Return Top 10
+
 
 # --- 5. PHASE: RATINGS ---
 def show_ratings_phase():
@@ -174,12 +327,32 @@ def get_processed_results(conn):
             "is_captain, player_role, manager_id, managers(manager_name, team_name), player_id, players(name), valid_from, valid_to"
         ).execute()  # .is_("valid_to", "null")
         
-        # Pull Scores
+        # Pull scores and schema metadata
+        schema_supports_stats = True
+        supports_day_number = False
+        score_res = None
+        try:
+            conn.client.schema(SCHEMA).table(TABLE_SCORES).select("goals").limit(1).execute()
+        except Exception:
+            schema_supports_stats = False
+
+        try:
+            conn.client.schema(SCHEMA).table(TABLE_SCORES).select("day_number").limit(1).execute()
+            supports_day_number = True
+        except Exception:
+            supports_day_number = False
+
+        if schema_supports_stats:
+            select_cols = "player_id, goals, assists, callahans"
+        else:
+            select_cols = "player_id, points_earned"
+        select_cols += ", match_id"
+
         score_res = (conn.client.schema(SCHEMA)
                      .table(TABLE_SCORES)
-                     .select("player_id, points_earned")
+                     .select(select_cols)
                      .execute())
-        
+
         if not roster_res.data:
             return pd.DataFrame(), pd.DataFrame()
 
@@ -189,35 +362,88 @@ def get_processed_results(conn):
             'managers.team_name': 'Team_Name',
             'players.name': 'player_name'
         })
+        df_rosters['valid_from'] = pd.to_datetime(df_rosters['valid_from'], utc=True, errors='coerce')
+        df_rosters['valid_to'] = pd.to_datetime(df_rosters['valid_to'], utc=True, errors='coerce')
+        df_rosters['valid_to'] = df_rosters['valid_to'].fillna(pd.Timestamp.max.tz_localize('UTC'))
 
         if not score_res.data:
-            df_scores = pd.DataFrame(columns=['player_id', 'points_earned'])
-        else:
-            df_scores = pd.DataFrame(score_res.data).groupby('player_id')['points_earned'].sum().reset_index()
-
-        merged = df_rosters.merge(df_scores, on="player_id", how="left")
-        merged['points_earned'] = merged['points_earned'].fillna(0)
-        
-        # Apply role and captain multipliers
-        def calculate_points(row):
-            base_points = row['points_earned']
-            
-            # Apply role multiplier (simplified - would need to break down goals vs assists in real implementation)
-            # For now, apply uniform role bonus
-            role = row.get('player_role', 'hybrid') or 'hybrid'
-            role_mult = 1.0  # Default, would need actual goal/assist breakdown for proper multiplier
-            
-            # Apply captain multiplier first
-            if row['is_captain']:
-                return base_points * CAPTAIN_MULTIPLIER * role_mult
+            if schema_supports_stats:
+                cols = ['player_id', 'goals', 'assists', 'callahans']
             else:
-                return base_points * role_mult
-        
-        merged['calc_pts'] = merged.apply(calculate_points, axis=1)
+                cols = ['player_id', 'points_earned']
+            if supports_day_number:
+                cols.append('day_number')
+            df_scores = pd.DataFrame(columns=cols)
+        else:
+            df_scores = pd.DataFrame(score_res.data)
+
+        # Compute the game datetime by joining player_scores with matches via match_id
+        match_time_res = conn.client.schema(SCHEMA).table("matches").select("id, start_time").execute()
+        if match_time_res.data and 'match_id' in df_scores.columns:
+            df_match_times = pd.DataFrame(match_time_res.data).rename(columns={"id": "match_id"})
+            df_scores['match_id'] = df_scores['match_id'].apply(
+                lambda x: None if pd.isna(x) else str(int(x)) if isinstance(x, float) else str(x)
+            )
+            df_match_times['match_id'] = df_match_times['match_id'].astype(str)
+            df_scores = df_scores.merge(df_match_times[["match_id", "start_time"]], on="match_id", how="left")
+            df_scores['game_datetime'] = pd.to_datetime(df_scores['start_time'], utc=True)
+        else:
+            df_scores['game_datetime'] = TOURNAMENT_START_DT
+
+        active_records = []
+        for _, roster_row in df_rosters.iterrows():
+            player_id = roster_row['player_id']
+            valid_from = roster_row['valid_from']
+            valid_to = roster_row['valid_to']
+            if pd.isna(valid_from):
+                continue
+
+            rosters_scores = df_scores[df_scores['player_id'] == player_id].copy()
+            rosters_scores['game_datetime'] = pd.to_datetime(rosters_scores['game_datetime'], utc=True)
+            rosters_scores = rosters_scores[(rosters_scores['game_datetime'] >= valid_from) & (rosters_scores['game_datetime'] < valid_to)]
+
+            if rosters_scores.empty:
+                total_goals = total_assists = total_callahans = 0.0
+                total_points = 0.0
+            else:
+                if schema_supports_stats:
+                    total_goals = rosters_scores['goals'].fillna(0).astype(float).sum()
+                    total_assists = rosters_scores['assists'].fillna(0).astype(float).sum()
+                    total_callahans = rosters_scores['callahans'].fillna(0).astype(float).sum()
+                    multiplier = ROLE_MULTIPLIERS.get(roster_row.get('player_role', 'hybrid') or 'hybrid', ROLE_MULTIPLIERS['hybrid'])
+                    total_points = (total_goals * multiplier['goals']
+                                    + total_assists * multiplier['assists']
+                                    + total_callahans * 10)
+                else:
+                    total_goals = total_assists = total_callahans = 0.0
+                    total_points = rosters_scores['points_earned'].fillna(0).astype(float).sum()
+
+            role = roster_row.get('player_role', 'hybrid') or 'hybrid'
+            calc_pts = total_points * CAPTAIN_MULTIPLIER if roster_row['is_captain'] else total_points
+
+            active_records.append({
+                'manager_id': roster_row['manager_id'],
+                'Team_Name': roster_row['Team_Name'],
+                'player_id': player_id,
+                'player_name': roster_row['player_name'],
+                'player_role': role,
+                'is_captain': roster_row['is_captain'],
+                'valid_from': valid_from,
+                'valid_to': valid_to,
+                'goals': total_goals,
+                'assists': total_assists,
+                'callahans': total_callahans,
+                'points_earned': total_points,
+                'calc_pts': calc_pts
+            })
+
+        merged = pd.DataFrame(active_records)
+        if merged.empty:
+            leaderboard = pd.DataFrame(columns=["Team", "Score"])
+            return leaderboard, pd.DataFrame()
 
         leaderboard = merged.groupby("Team_Name")["calc_pts"].sum().reset_index()
         leaderboard.columns = ["Team", "Score"]
-        
         return leaderboard.sort_values(by="Score", ascending=False).reset_index(drop=True), merged
     except Exception as e:
         st.sidebar.error(f"Leaderboard Error: {e}")
@@ -225,30 +451,133 @@ def get_processed_results(conn):
 
 # --- 7. PHASE: DRAFT & LIVE ---
 def show_main_interface(is_live):
+    # 1. Initialize variables to avoid 'Undefined' errors
+    team_name = None
+    manager_pin = ""    
+    already_confirmed = bool(st.session_state.get('confirmed_team_name'))
+    
     if is_live:
-        st.title("🏆 Live Tournament Results")
-        board, full_data = get_processed_results(conn)
+        st.title("🏆 Live Tournament Center")
         
-        if not board.empty:
-            board['Rank'] = board['Score'].rank(method='min', ascending=False).astype(int)
-            top_3_teams = board[board['Rank'] <= 3].copy()
-            c1, c2, c3 = st.columns(3)
-            cols = [c1, c2, c3]
-            for i in range(3):
-                with cols[i]:
-                    if i < len(top_3_teams):
-                        row = top_3_teams.iloc[i]
-                        st.metric(f"{['🥇 1st', '🥈 2nd', '🥉 3rd'][i]} Place", row['Team'], f"{int(row['Score'])} pts")
+        # 2. Fetch Fresh Match Data
+        match_res = conn.client.schema(SCHEMA).table("matches").select("*").execute()
+        m_df = pd.DataFrame(match_res.data)
+        
+        # 3. Define Tabs
+        # Updated Tab list
+        portal_tab, fantasy_tab, standings_tab, matches_tab, spirit_tab = st.tabs([
+            "🛡️ Manager Transfer Portal", "💎 Fantasy Leaderboard", "📊 Standings", "📅 Match Results", "😇 Spirit", 
+        ])
 
-            with st.expander("📊 View Full Rankings", expanded=False):
-                if st.button("🔄 Sync Fresh Data"):
-                    st.cache_data.clear(); st.rerun()
+        with portal_tab:
+            # ALL AUTH AND TRANSFER LOGIC LIVES HERE NOW
+            if not already_confirmed:
+                st.subheader("🛡️ Manager Login")
+                col_l1, col_l2 = st.columns(2)
+                with col_l1:
+                    t_name = st.selectbox("Select Team", all_team_names, index=None, key="live_login_team")
+                with col_l2:
+                    m_pin = st.text_input("PIN", type="password", key="live_login_pin")
+                
+                if t_name and len(m_pin) == PIN_LENGTH:
+                    # AUTHENTICATION CHECK
+                    auth_res = conn.client.schema(SCHEMA).table(TABLE_MANAGERS).select("*").eq("team_name", t_name).eq("pin", m_pin).execute()
+                    if auth_res.data:
+                        st.session_state.confirmed_team_name = t_name
+                        st.session_state.confirmed_mgr_name = auth_res.data[0]['manager_name']
+                        st.session_state.confirmed_mgr_pin = m_pin
+                        st.session_state.manager_id = auth_res.data[0]['id']
+                        st.rerun()
+                    else:
+                        st.error("❌ Incorrect PIN")
+            else:
+                # This function should contain your existing roster/transfer UI code
+                render_manager_portal_logic()      
+
+        with fantasy_tab:
+            st.subheader("💎 Fantasy Rankings")
+            board, _ = get_processed_results(conn)
+            if not board.empty:
+                board['Rank'] = board['Score'].rank(method='min', ascending=False).astype(int)
+                # Metrics for Top 3
+                c1, c2, c3 = st.columns(3)
+                for i, col in enumerate([c1, c2, c3]):
+                    if i < len(board):
+                        row = board.iloc[i]
+                        col.metric(f"{['🥇', '🥈', '🥉'][i]} {row['Team']}", f"{int(row['Score'])} pts")
                 st.dataframe(board[['Rank', 'Team', 'Score']], use_container_width=True, hide_index=True)
-        st.divider()
 
-    # --- DRAFTING / LOGIN LOGIC ---
-    if is_live: st.subheader("🛡️ Manager Transfer Portal")
-    else: st.title(f"🏆 {TOURNAMENT_NAME}")
+        with spirit_tab:
+            st.subheader("😇 Spirit of the Game Leaderboard")
+            st.caption("Average spirit score received per match (out of 20)")
+            
+            # Filter only for completed matches
+            completed_matches = m_df[m_df['status'] == 'completed']
+            col_open, col_women = st.columns(2)
+            
+            with col_open:
+                st.markdown("### Open Division")
+                open_spirit = completed_matches[completed_matches['division'] == 'Open']
+                spirit_df = calculate_spirit_standings(open_spirit)
+                st.table(spirit_df.style.format({"Avg Spirit": "{:.2f}"}))
+
+                st.write("**Top 10 Most Respcted Players (MRP)**")
+                open_mrp = get_mrp_leaderboard(open_spirit)
+                if not open_mrp.empty:
+                    st.dataframe(open_mrp, use_container_width=True, hide_index=True)
+                else:
+                    st.caption("No MRP votes yet.")                
+                
+            with col_women:
+                st.markdown("### Women's Division")
+                women_spirit = completed_matches[completed_matches['division'] == 'Women']
+                spirit_df_wo = calculate_spirit_standings(women_spirit)
+                st.table(spirit_df_wo.style.format({"Avg Spirit": "{:.2f}"}))
+
+                # MRP Standings
+                st.write("**Top 10 Most Respcted Players (MRP)**")
+                women_mrp = get_mrp_leaderboard(women_spirit)
+                if not women_mrp.empty:
+                    st.dataframe(women_mrp, use_container_width=True, hide_index=True)
+                else:
+                    st.caption("No MRP votes yet.")                
+
+            st.divider()
+
+        with standings_tab:
+            st.subheader("Open's Division")
+            col_a, col_b = st.columns(2)
+            open_matches = m_df[m_df['division'] == 'Open']
+            with col_a:
+                st.caption("Pool A")
+                st.table(calculate_standings(open_matches[open_matches['stage'].str.contains("Pool A", na=False)], pool_name="Pool A"))
+            with col_b:
+                st.caption("Pool B")
+                st.table(calculate_standings(open_matches[open_matches['stage'].str.contains("Pool B", na=False)], pool_name="Pool B"))
+            
+            st.markdown("---")
+            st.markdown("### Women's Division")
+            women_rr = m_df[(m_df['division'] == 'Women') & (m_df['stage'] == 'Women RR')]
+            st.table(calculate_standings(women_rr, pool_name="Women"))
+
+        with matches_tab:
+            st.subheader("Recent Results")
+            completed = m_df[m_df['status'] == 'completed'].sort_values(by='last_updated', ascending=False)
+            if not completed.empty:
+                for _, row in completed.iterrows():
+                    st.write(f"**{row['stage']}**: {row['team_a']} **{int(round(row['score_a'], 0))} - {int(round(row['score_b'], 0))}** {row['team_b']}")
+            else:
+                st.info("No matches completed yet.")
+
+    else:
+        # --- DRAFT MODE (NON-LIVE) ---
+        st.title(f"🏆 {TOURNAMENT_NAME}")
+        if not already_confirmed:
+            # Put your Draft Registration UI here (Team Name, Manager Name, Create PIN)
+            # Use st.text_input and a submit button to set session_state and rerun
+            pass
+        else:
+            render_manager_portal_logic()
 
     if st.session_state.get('update_success'):
         st.balloons(); st.success("✅ Team updated successfully!")
@@ -259,19 +588,7 @@ def show_main_interface(is_live):
 
     if not already_confirmed:
         if is_live:
-            # LIVE MODE: Select existing team by team name
-            col_l1, col_l2 = st.columns(2)
-            with col_l1:
-                team_name = st.selectbox(
-                    "Select Your Team:",
-                    options=all_team_names,
-                    index=None,
-                    placeholder="Choose your team...",
-                    key="team_name_select"
-                )
-            with col_l2:
-                manager_pin = st.text_input("🔓 Enter PIN:", key="mgr_pin_persistent", type="password", max_chars=PIN_LENGTH)
-            manager_name = ""  # populated from DB after auth
+            pass
         else:
             # DRAFT MODE: team name (unique) + manager name (new only) + PIN
             team_name = st.text_input(
@@ -483,23 +800,31 @@ def show_main_interface(is_live):
                     st.caption(f"Used: {st.session_state.auth_user.get('transfers_used', 0)}/{MAX_PLAYER_TRANSFERS} Transfers, {st.session_state.auth_user.get('captain_changes_used', 0)}/{MAX_CAPTAIN_CHANGES} Captain Changes")
             
             # 2. Show Current Roster
+            full_data = pd.DataFrame()
+            if is_live:
+                _, full_data = get_processed_results(conn)
             with st.expander("📋 Your Roster", expanded=True):
-                if is_live and 'full_data' in locals() and not full_data.empty:
+                if is_live and not full_data.empty:
+                    print("DEBUG 2")
                     my_points = full_data[full_data['manager_id'] == m_id] if m_id else pd.DataFrame()
                     if not my_points.empty:
                         _display = my_points[['player_name', 'points_earned', 'is_captain', 'player_role', 'calc_pts', 'valid_from', 'valid_to']].copy()
+                        max_ts_utc = pd.Timestamp.max.tz_localize('UTC')
                         def fmt_ts(val):
-                            if not val or val == 0:
+                            if pd.isna(val):
                                 return ''
                             try:
-                                return pd.to_datetime(val, utc=True).strftime('%-d %b %H:%M')
+                                ts = pd.to_datetime(val, utc=True)
+                                if ts == max_ts_utc:
+                                    return ''
+                                return f"{ts.day} {ts.strftime('%b %H:%M')}"
                             except Exception:
                                 return str(val)
                         _display['valid_from'] = _display['valid_from'].apply(fmt_ts)
                         _display['valid_to'] = _display['valid_to'].apply(fmt_ts)
                         _display = _display.sort_values(by=["player_name", "valid_from"])
                         st.dataframe(_display, hide_index=True, use_container_width=True)
-                    else: 
+                    else:
                         st.write(f"**Players:** {', '.join(st.session_state.roster)}")
                 else: 
                     st.write(f"**Players:** {', '.join(st.session_state.roster)}")
@@ -870,10 +1195,287 @@ def show_main_interface(is_live):
                 if not captains_set:
                     st.info("ℹ️ You must select 1 captain per division before you can submit your team.")
 
+def show_admin_score_entry():
+    """Completely hidden admin page for bulk score entry and tournament management."""
+    st.title("🔐 Admin Score Entry")
+    
+    # 1. Admin Authentication
+    if not st.session_state.admin_auth:
+        st.subheader("🔐 Admin Authentication")
+        admin_pin = st.text_input("Enter admin PIN:", type="password", key="admin_pin_input")
+        if st.button("Authenticate", use_container_width=True):
+            if admin_pin == ADMIN_PIN:
+                st.session_state.admin_auth = True
+                st.rerun()
+            else:
+                st.error("❌ Invalid PIN")
+        st.stop()
+
+    # --- FIX 1: Fetch fresh player data inside the function and sanitize strings ---
+    players_res = conn.client.schema(SCHEMA).table("players").select("*").execute()
+    df_players_local = pd.DataFrame(players_res.data)
+    # Strip whitespace to prevent "Hidden Space" mismatches
+    df_players_local['team'] = df_players_local['team'].astype(str).str.strip()
+    
+    # 2. Admin Header & Logout
+    col1, col2 = st.columns([5, 1])
+    with col1:
+        st.write("👑 **Admin Access Granted**")
+    with col2:
+        if st.button("Logout", use_container_width=True):
+            st.session_state.admin_auth = False
+            st.session_state.admin_team_selected = None
+            st.rerun()
+    
+    st.divider()
+
+    # --- TOURNAMENT MANAGEMENT SECTION ---
+    # Fetch fresh match data for the management section
+    match_res_raw = conn.client.schema(SCHEMA).table("matches").select("*").order("id").execute()
+    m_df_raw = pd.DataFrame(match_res_raw.data)
+
+    with st.expander("🔄 Update Playoff Seeds / Team Names"):
+        st.write("Use this to replace placeholders (e.g., 'A1') with real team names.")
+        
+        target_match_id = st.selectbox("Select Match to Rename Teams:", options=m_df_raw['id'].tolist(), key="rename_match_select")
+        m_to_fix = m_df_raw[m_df_raw['id'] == target_match_id].iloc[0]
+        
+        real_teams_list = sorted(df_players_local['team'].unique().tolist())
+        
+        c_fix1, c_fix2 = st.columns(2)
+        new_ta = c_fix1.selectbox(f"Team A (currently {m_to_fix['team_a']}):", options=real_teams_list, index=real_teams_list.index(m_to_fix['team_a']) if m_to_fix['team_a'] in real_teams_list else 0)
+        new_tb = c_fix2.selectbox(f"Team B (currently {m_to_fix['team_b']}):", options=real_teams_list, index=real_teams_list.index(m_to_fix['team_b']) if m_to_fix['team_b'] in real_teams_list else 0)
+        
+        if st.button("Update Matchup Names"):
+            conn.client.schema(SCHEMA).table("matches").update({"team_a": new_ta, "team_b": new_tb}).eq("id", target_match_id).execute()
+            st.success(f"Updated Match {target_match_id} to {new_ta} vs {new_tb}")
+            time.sleep(1)
+            st.rerun()
+
+    st.divider()
+
+    # 3. Load Match Schedule for Scoring
+    try:
+        match_df = m_df_raw 
+        match_options = match_df.apply(
+            lambda x: f"{x['id']}: {x['team_a']} vs {x['team_b']} ({x['stage']})", axis=1
+        ).tolist()
+        
+        selected_option = st.selectbox("🎯 Select Match to Record Scores:", options=match_options)
+        selected_id = selected_option.split(":")[0]
+        m_row = match_df[match_df['id'].astype(str) == str(selected_id)].iloc[0]
+
+        # Load any previously saved player stats for this match
+        existing_player_stats = {}
+        score_res = conn.client.schema(SCHEMA).table(TABLE_SCORES).select(
+            "player_id, goals, assists, callahans"
+        ).eq("match_id", selected_id).execute()
+        if score_res.data:
+            existing_player_stats = {row['player_id']: row for row in score_res.data}
+
+    except Exception as e:
+        st.error(f"Error loading schedule: {e}")
+        st.stop()
+
+    # --- 4. Match Details & Final Scores ---
+    st.subheader(f"🏟️ Game {selected_id} Details ({m_row['division']} - {m_row['stage']})")
+    col_score_a, col_vs, col_score_b = st.columns([2, 1, 2])
+    
+    m_row = m_row.fillna(0)
+
+    with col_score_a:
+        val_a = int(m_row.get('score_a', 0))
+        score_a = st.number_input(f"Score: {m_row['team_a']}", min_value=0, max_value=15, step=1, value=val_a, key=f"score_a_{selected_id}")
+
+    with col_vs:
+        st.markdown("<h3 style='text-align: center; padding-top: 25px;'>VS</h3>", unsafe_allow_html=True)
+
+    with col_score_b:
+        val_b = int(m_row.get('score_b', 0))
+        score_b = st.number_input(f"Score: {m_row['team_b']}", min_value=0, max_value=15, step=1, value=val_b, key=f"score_b_{selected_id}")
+
+    st.divider()
+
+    # --- 5. Side-by-Side Roster & Spirit ---
+    team_a_col, team_b_col = st.columns(2)
+    all_player_stats = []
+
+    # --- FIX 2: Bulletproof filtering using stripped strings ---
+    target_team_a = str(m_row['team_a']).strip()
+    target_team_b = str(m_row['team_b']).strip()
+
+    # --- TEAM A COLUMN ---
+    with team_a_col:
+        st.subheader(f"🏠 {target_team_a}")
+        players_a = df_players_local[(df_players_local['team'] == target_team_a) & (df_players_local['price'] > 0)]
+        players_a_mrp = df_players_local[df_players_local['team'] == target_team_a]
+        
+        if players_a.empty:
+            st.warning("No players found. Check for name mismatches.")
+        else:
+            h = st.columns([3, 1, 1, 1])
+            h[0].caption("Player"); h[1].caption("Goals"); h[2].caption("Assists"); h[3].caption("Callahans")  
+        
+            for _, p in players_a.iterrows():
+                c = st.columns([3, 1, 1, 1])
+                c[0].write(p['name'])
+                existing = existing_player_stats.get(p['id'], {})
+                g = c[1].number_input(
+                    "G", 0, 15, int(existing.get('goals', 0)), key=f"ga_{p['id']}_{selected_id}", label_visibility="collapsed"
+                )
+                a = c[2].number_input(
+                    "A", 0, 15, int(existing.get('assists', 0)), key=f"aa_{p['id']}_{selected_id}", label_visibility="collapsed"
+                )
+                cal = c[3].number_input(
+                    "C", 0, 15, int(existing.get('callahans', 0)), key=f"ca_{p['id']}_{selected_id}", label_visibility="collapsed"
+                )
+                if g > 0 or a > 0 or cal > 0:
+                    all_player_stats.append({"player_id": p['id'], "goals": g, "assists": a,
+                                             "callahans": cal, "match_id": selected_id})
+
+    # --- TEAM B COLUMN ---
+    with team_b_col:
+        st.subheader(f"🚀 {target_team_b}")
+        players_b_mrp = df_players_local[df_players_local['team'] == target_team_b]
+        players_b =  df_players_local[(df_players_local['team'] == target_team_b) & (df_players_local['price'] > 0)]
+        
+        if players_b.empty:
+            st.warning("No players found. Check for name mismatches.")
+        else:
+            # 2. Table Headings
+            h = st.columns([3, 1, 1, 1])
+            h[0].caption("Player"); h[1].caption("Goals"); h[2].caption("Assists"); h[3].caption("Callahans")            
+
+            for _, p in players_b.iterrows():
+                c = st.columns([3, 1, 1, 1])
+                c[0].write(p['name'])
+                existing = existing_player_stats.get(p['id'], {})
+                g = c[1].number_input(
+                    "G", 0, 15, int(existing.get('goals', 0)), key=f"gb_{p['id']}_{selected_id}", label_visibility="collapsed"
+                )
+                a = c[2].number_input(
+                    "A", 0, 15, int(existing.get('assists', 0)), key=f"ab_{p['id']}_{selected_id}", label_visibility="collapsed"
+                )
+                cal = c[3].number_input(
+                    "C", 0, 15, int(existing.get('callahans', 0)), key=f"cb_{p['id']}_{selected_id}", label_visibility="collapsed"
+                )
+                if g > 0 or a > 0 or cal > 0:
+                    all_player_stats.append({"player_id": p['id'], "goals": g, "assists": a,
+                                             "callahans": cal, "match_id": selected_id})
+    st.divider()
+
+    team_a_col_2, team_b_col_2 = st.columns(2)
+
+    with team_a_col_2:
+        st.markdown(f"#### ⚖️ Spirit FOR Team {target_team_a}")
+        s_rules_a = st.slider("Rules Knowledge", 0, 4, int(m_row.get('s_rules_a') or 0), key=f"ra_{selected_id}")
+        s_fouls_a = st.slider("Fouls & Contact", 0, 4, int(m_row.get('s_fouls_a') or 0), key=f"fa_{selected_id}")
+        s_fair_a  = st.slider("Fair-Mindedness", 0, 4, int(m_row.get('s_fair_a') or 0), key=f"fma_{selected_id}")
+        s_pos_a   = st.slider("Attitude", 0, 4, int(m_row.get('s_pos_a') or 0), key=f"pa_{selected_id}")
+        s_comm_a  = st.slider("Communication", 0, 4, int(m_row.get('s_comm_a') or 0), key=f"ca_{selected_id}")
+        
+        total_spirit_a = s_rules_a + s_fouls_a + s_fair_a + s_pos_a + s_comm_a
+        st.metric(f"Total Spirit {target_team_a}", f"{total_spirit_a}/20")
+
+        mrp_options_a = ["None"] + sorted(players_a_mrp['name'].tolist())
+        initial_mrp_a = m_row.get('mrp_a') or "None"
+        if initial_mrp_a and initial_mrp_a not in mrp_options_a:
+            mrp_options_a.insert(0, initial_mrp_a)
+        mrp_a_index = mrp_options_a.index(initial_mrp_a) if initial_mrp_a in mrp_options_a else 0
+        mrp_a = st.selectbox(
+            f"Most Respected Player {target_team_a}",
+            options=mrp_options_a,
+            index=mrp_a_index,
+            key=f"mrp_a_{selected_id}"
+        )
+
+    with team_b_col_2:
+        st.markdown(f"#### ⚖️ Spirit FOR Team {target_team_b}")
+        s_rules_b = st.slider("Rules Knowledge", 0, 4, int(m_row.get('s_rules_b') or 0), key=f"rb_{selected_id}")
+        s_fouls_b = st.slider("Fouls & Contact", 0, 4, int(m_row.get('s_fouls_b') or 0), key=f"fb_{selected_id}")
+        s_fair_b  = st.slider("Fair-Mindedness", 0, 4, int(m_row.get('s_fair_b') or 0), key=f"fmb_{selected_id}")
+        s_pos_b   = st.slider("Attitude", 0, 4, int(m_row.get('s_pos_b') or 0), key=f"pb_{selected_id}")
+        s_comm_b  = st.slider("Communication", 0, 4, int(m_row.get('s_comm_b') or 0), key=f"cb_{selected_id}")
+
+        total_spirit_b = s_rules_b + s_fouls_b + s_fair_b + s_pos_b + s_comm_b
+        st.metric(f"Total Spirit {target_team_b}", f"{total_spirit_b}/20")
+
+        mrp_options_b = ["None"] + sorted(players_b_mrp['name'].tolist())
+        initial_mrp_b = m_row.get('mrp_b') or "None"
+        if initial_mrp_b and initial_mrp_b not in mrp_options_b:
+            mrp_options_b.insert(0, initial_mrp_b)
+        mrp_b_index = mrp_options_b.index(initial_mrp_b) if initial_mrp_b in mrp_options_b else 0
+        mrp_b = st.selectbox(
+            f"Most Respected Player {target_team_b}",
+            options=mrp_options_b,
+            index=mrp_b_index,
+            key=f"mrp_b_{selected_id}"
+        )
+
+    # --- 7. Unified Save Logic ---
+    if st.button("💾 Save Full Match Result", use_container_width=True, type="primary"):
+        match_payload = {
+            "id": selected_id,
+            "division": m_row['division'],
+            "stage": m_row['stage'],
+            "team_a": m_row['team_a'],
+            "team_b": m_row['team_b'],            
+            "score_a": score_a,
+            "score_b": score_b,
+            "s_rules_a": s_rules_a, "s_fouls_a": s_fouls_a, "s_fair_a": s_fair_a, 
+            "s_pos_a": s_pos_a, "s_comm_a": s_comm_a, "spirit_total_a": total_spirit_a,
+            "mrp_a": mrp_a,
+            "s_rules_b": s_rules_b, "s_fouls_b": s_fouls_b, "s_fair_b": s_fair_b, 
+            "s_pos_b": s_pos_b, "s_comm_b": s_comm_b, "spirit_total_b": total_spirit_b,
+            "mrp_b": mrp_b,
+            "status": "completed",
+            "last_updated": datetime.now().isoformat()
+        }
+
+        # Validate match and team totals before saving
+        if score_a > 15 or score_b > 15:
+            st.error("Match scores cannot exceed 15 points per team.")
+        else:
+            player_team = df_players_local.set_index('id')['team'].to_dict()
+            team_goals = {target_team_a: 0, target_team_b: 0}
+            team_assists = {target_team_a: 0, target_team_b: 0}
+            for stat in all_player_stats:
+                team = player_team.get(stat['player_id'])
+                if team == target_team_a:
+                    team_goals[target_team_a] += stat.get('goals', 0)
+                    team_assists[target_team_a] += stat.get('assists', 0)
+                elif team == target_team_b:
+                    team_goals[target_team_b] += stat.get('goals', 0)
+                    team_assists[target_team_b] += stat.get('assists', 0)
+
+            if team_goals[target_team_a] > 15 or team_goals[target_team_b] > 15:
+                st.error("Total goals per team cannot exceed 15.")
+            elif team_assists[target_team_a] > 15 or team_assists[target_team_b] > 15:
+                st.error("Total assists per team cannot exceed 15.")
+            else:
+                conn.client.schema(SCHEMA).table("matches").upsert(match_payload).execute()
+
+                # Replace any existing player stats for this match to avoid duplicates
+                conn.client.schema(SCHEMA).table(TABLE_SCORES).delete().eq("match_id", selected_id).execute()
+                if all_player_stats:
+                    conn.client.schema(SCHEMA).table(TABLE_SCORES).insert(all_player_stats).execute()
+                    
+                st.success("✅ Match results and individual stats saved!")
+                st.balloons()
+                time.sleep(1)
+                st.rerun()
+
 # --- MAIN ROUTER ---
-if STAGE == "RATINGS":
-    show_ratings_phase()
-elif STAGE == "DRAFT":
-    show_main_interface(is_live=False)
-elif STAGE == "LIVE":
-    show_main_interface(is_live=True)
+# Check for admin access via URL parameter
+query_params = st.query_params
+admin_param = query_params.get("admin")
+if admin_param == "true":
+    show_admin_score_entry()
+else:
+    # Normal fantasy league routing
+    if STAGE == "RATINGS":
+        show_ratings_phase()
+    elif STAGE == "DRAFT":
+        show_main_interface(is_live=False)
+    elif STAGE == "LIVE":
+        show_main_interface(is_live=True)

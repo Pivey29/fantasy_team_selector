@@ -49,11 +49,14 @@ CREATE TABLE prd.rosters (
 CREATE TABLE prd.player_scores (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     player_id UUID NOT NULL REFERENCES prd.players(id) ON DELETE CASCADE,
-    day_number INTEGER NOT NULL,
-    points_earned NUMERIC DEFAULT 0,
+    match_id TEXT,
+    game_datetime TIMESTAMPTZ NOT NULL,
+    goals INTEGER DEFAULT 0,
+    assists INTEGER DEFAULT 0,
+    callahans INTEGER DEFAULT 0,
     updated_at TIMESTAMPTZ DEFAULT now(),
     
-    CONSTRAINT unique_player_day UNIQUE (player_id, day_number)
+    CONSTRAINT unique_player_game UNIQUE (player_id, game_datetime)
 );
 
 -- MIGRATION: Add player_role to existing rosters table (if not already present)
@@ -61,6 +64,35 @@ CREATE TABLE prd.player_scores (
 --ALTER TABLE prd.rosters ADD COLUMN IF NOT EXISTS player_role TEXT DEFAULT 'hybrid' CHECK (player_role IN ('handler', 'cutter', 'hybrid'));
 -- If migrating from neutral to hybrid values:
 --UPDATE prd.rosters SET player_role = 'hybrid' WHERE player_role = 'neutral';
+
+-- MIGRATION: Update player_scores table for game-based scoring
+-- Uncomment and run if updating an existing database:
+--ALTER TABLE prd.player_scores ADD COLUMN IF NOT EXISTS game_number INTEGER;
+--ALTER TABLE prd.player_scores ADD COLUMN IF NOT EXISTS goals INTEGER DEFAULT 0;
+--ALTER TABLE prd.player_scores ADD COLUMN IF NOT EXISTS assists INTEGER DEFAULT 0;
+--ALTER TABLE prd.player_scores ADD COLUMN IF NOT EXISTS callahans INTEGER DEFAULT 0;
+--ALTER TABLE prd.player_scores ADD COLUMN IF NOT EXISTS game_datetime TIMESTAMPTZ;
+--ALTER TABLE prd.player_scores DROP COLUMN IF EXISTS day_number;
+--ALTER TABLE prd.player_scores DROP COLUMN IF EXISTS points_earned;
+
+-- MIGRATION: Update rosters player_role constraint to include 'hybrid'
+-- Uncomment and run if updating an existing database:
+-- First update any 'neutral' values to 'hybrid'
+--UPDATE prd.rosters SET player_role = 'hybrid' WHERE player_role = 'neutral';
+-- Then drop the old constraint and add the new one
+--ALTER TABLE prd.rosters DROP CONSTRAINT IF EXISTS rosters_player_role_check;
+--ALTER TABLE prd.rosters ADD CONSTRAINT rosters_player_role_check CHECK (player_role IN ('handler', 'cutter', 'hybrid'));
+
+-- MIGRATION: Create games table for tournament tracking
+-- Uncomment and run if updating an existing database:
+--CREATE TABLE prd.games (
+--    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+--    game_number INTEGER NOT NULL UNIQUE,
+--    game_date TIMESTAMPTZ NOT NULL,
+--    home_team TEXT,
+--    away_team TEXT,
+--    created_at TIMESTAMPTZ DEFAULT now()
+--);
 
 -- 5. Security & Permissions (The "No-Headache" Configuration)
 -- Enable RLS on all
@@ -95,3 +127,39 @@ GRANT ALL ON TABLES TO anon, authenticated, service_role;
 
 -- 9. Refresh API Cache
 NOTIFY pgrst, 'reload schema';
+
+CREATE TABLE prd.matches (
+    id TEXT PRIMARY KEY,
+    division TEXT NOT NULL, -- 'Open' or 'Women'
+    stage TEXT NOT NULL,    -- e.g., 'Pool A', 'Finals'
+    team_a TEXT NOT NULL,
+    team_b TEXT NOT NULL,
+    
+    -- Results
+    score_a INT DEFAULT NULL,
+    score_b INT DEFAULT NULL,
+    
+    -- Spirit Team A (Scores awarded TO Team A by Team B)
+    s_rules_a INT DEFAULT 2,
+    s_fouls_a INT DEFAULT 2,
+    s_fair_a INT DEFAULT 2,
+    s_pos_a INT DEFAULT 2,
+    s_comm_a INT DEFAULT 2,
+    spirit_total_a INT DEFAULT 0,
+    mrp_a TEXT DEFAULT NULL,
+
+    -- Spirit Team B (Scores awarded TO Team B by Team A)
+    s_rules_b INT DEFAULT 2,
+    s_fouls_b INT DEFAULT 2,
+    s_fair_b INT DEFAULT 2,
+    s_pos_b INT DEFAULT 2,
+    s_comm_b INT DEFAULT 2,
+    spirit_total_b INT DEFAULT 0,
+    mrp_b TEXT DEFAULT NULL,
+
+    -- Metadata
+    field TEXT,
+    start_time TIMESTAMP WITH TIME ZONE,
+    status TEXT DEFAULT 'scheduled', -- 'scheduled', 'completed'
+    last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);

@@ -14,6 +14,11 @@ MAX_GENDER_SIZE = 5
 MIN_GENDER_SIZE = 5
 MAX_TEAM_SIZE = 2
 CAPTAIN_MULTIPLIER = 2
+POOL_ASSIGNMENTS = {
+        "Pool A": ["Mutiny", "Kaalvoet Kaos", "Wits Rising", "Zephyr", "UFH Simbas"],
+        "Pool B": ["Rex", "Bunnies", "Inyhwagi", "Maties Ma'Gents", "Gradient",  "UCT Mancubs"],
+        "Women": ["Maties Ma'Ladies", "UFH Nalas", "Craft", "Hot Sauce", "Wicked", "Fierce", "UCT Bengals"]
+    }
 
 # --- PLAYER ROLES & SCORING ---
 PLAYER_ROLES = ["handler", "cutter", "hybrid"]
@@ -29,7 +34,8 @@ ROLE_MULTIPLIERS = {
 }
 
 PIN_LENGTH = 4
-MAX_PLAYER_TRANSFERS = 5
+MAX_PLAYER_TRANSFERS = 4
+ADMIN_PIN = "1234"  # Change this to your secure admin PIN
 MAX_CAPTAIN_CHANGES = 2
 # tables names from DB
 TABLE_PLAYERS = "players"
