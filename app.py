@@ -322,10 +322,25 @@ def get_processed_results(conn):
         return pd.DataFrame(), pd.DataFrame()
 
     try:
-        # Pull Active Rosters from prd
-        roster_res = conn.client.schema(SCHEMA).table(TABLE_ROSTERS).select(
-            "is_captain, player_role, manager_id, managers(manager_name, team_name), player_id, players(name), valid_from, valid_to"
-        ).execute()  # .is_("valid_to", "null")
+        # Pull all roster rows via pagination (PostgREST server max_rows caps single requests at 1000)
+        all_roster_data = []
+        page_size = 1000
+        offset = 0
+        while True:
+            page = conn.client.schema(SCHEMA).table(TABLE_ROSTERS).select(
+                "is_captain, player_role, manager_id, managers(manager_name, team_name), player_id, players(name), valid_from, valid_to"
+            ).range(offset, offset + page_size - 1).execute()
+            if not page.data:
+                break
+            all_roster_data.extend(page.data)
+            if len(page.data) < page_size:
+                break
+            offset += page_size
+
+        class _FakeRes:
+            def __init__(self, data): self.data = data
+        roster_res = _FakeRes(all_roster_data)
+
         
         # Pull scores and schema metadata
         schema_supports_stats = True
@@ -804,29 +819,47 @@ def show_main_interface(is_live):
             if is_live:
                 _, full_data = get_processed_results(conn)
             with st.expander("📋 Your Roster", expanded=True):
-                if is_live and not full_data.empty:
-                    print("DEBUG 2")
-                    my_points = full_data[full_data['manager_id'] == m_id] if m_id else pd.DataFrame()
-                    if not my_points.empty:
-                        _display = my_points[['player_name', 'points_earned', 'is_captain', 'player_role', 'calc_pts', 'valid_from', 'valid_to']].copy()
-                        max_ts_utc = pd.Timestamp.max.tz_localize('UTC')
-                        def fmt_ts(val):
-                            if pd.isna(val):
+                # Always query this manager's roster directly to get all rows (incl. transferred-out)
+                # Using full_data for the roster list risks missing rows due to unfiltered global fetches
+                _hist = conn.client.schema(SCHEMA).table(TABLE_ROSTERS).select(
+                    "is_captain, player_role, player_id, players(name), valid_from, valid_to"
+                ).eq("manager_id", m_id).order("valid_from").execute()
+                print(f"DEBUG!!!\n{_hist}\n")
+
+                if _hist.data:
+                    max_ts_utc = pd.Timestamp.max.tz_localize('UTC')
+                    def fmt_ts(val):
+                        if pd.isna(val):
+                            return ''
+                        try:
+                            ts = pd.to_datetime(val, utc=True)
+                            if ts == max_ts_utc:
                                 return ''
-                            try:
-                                ts = pd.to_datetime(val, utc=True)
-                                if ts == max_ts_utc:
-                                    return ''
-                                return f"{ts.day} {ts.strftime('%b %H:%M')}"
-                            except Exception:
-                                return str(val)
-                        _display['valid_from'] = _display['valid_from'].apply(fmt_ts)
-                        _display['valid_to'] = _display['valid_to'].apply(fmt_ts)
-                        _display = _display.sort_values(by=["player_name", "valid_from"])
-                        st.dataframe(_display, hide_index=True, use_container_width=True)
-                    else:
-                        st.write(f"**Players:** {', '.join(st.session_state.roster)}")
-                else: 
+                            return f"{ts.day} {ts.strftime('%b %H:%M')}"
+                        except Exception:
+                            return str(val)
+
+                    # Build base display from DB rows
+                    _rows = [{'player_name': r['players']['name'], 'points_earned': 0.0, 'is_captain': r['is_captain'], 'player_role': r.get('player_role') or 'hybrid', 'calc_pts': 0.0, 'valid_from': r.get('valid_from'), 'valid_to': r.get('valid_to')} for r in _hist.data]
+                    _display = pd.DataFrame(_rows)
+
+                    # Overlay points from full_data where available (matched on player_id + valid window)
+                    if is_live and not full_data.empty:
+                        my_points = full_data[full_data['manager_id'] == m_id]
+                        
+                        if not my_points.empty:
+                            pts_map = {(row['player_id'], str(row['valid_from'])): (row['points_earned'], row['calc_pts']) for _, row in my_points.iterrows()}
+                            for i, r in enumerate(_hist.data):
+                                key = (r['player_id'], str(pd.to_datetime(r.get('valid_from'), utc=True)))
+                                if key in pts_map:
+                                    _display.at[i, 'points_earned'] = pts_map[key][0]
+                                    _display.at[i, 'calc_pts'] = pts_map[key][1]
+
+                    _display['valid_from'] = _display['valid_from'].apply(fmt_ts)
+                    _display['valid_to'] = _display['valid_to'].apply(fmt_ts)
+                    _display = _display.sort_values(by=["player_name", "valid_from"])
+                    st.dataframe(_display[['player_name', 'points_earned', 'is_captain', 'player_role', 'calc_pts', 'valid_from', 'valid_to']], hide_index=True, use_container_width=True)
+                else:
                     st.write(f"**Players:** {', '.join(st.session_state.roster)}")
 
         # 3. Transfer/Edit Logic Gate
