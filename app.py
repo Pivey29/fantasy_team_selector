@@ -220,7 +220,9 @@ def calculate_spirit_standings(df):
     
     # Round to 2 decimal places and sort
     standings["Avg Spirit"] = standings["Avg Spirit"].round(2)
-    return standings.sort_values(by="Avg Spirit", ascending=False)
+    sorted_standings = standings.sort_values(by="Avg Spirit", ascending=False).reset_index(drop=True)
+    sorted_standings.index = sorted_standings.index + 1
+    return sorted_standings
 
 
 def get_mrp_leaderboard(m_df):
