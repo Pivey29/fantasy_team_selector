@@ -191,7 +191,9 @@ def calculate_standings(df, pool_name):
     standings['PD'] = standings['PS'] - standings['PA']
     
     # 5. Sort: Wins > PD > Points Scored
-    return standings.sort_values(by=['W', 'PD', 'PS'], ascending=False).reset_index(drop=True)
+    result = standings.sort_values(by=['W', 'PD', 'PS'], ascending=False).reset_index(drop=True)
+    result.index = result.index + 1
+    return result
 
 
 def calculate_spirit_standings(df):
@@ -239,6 +241,60 @@ def get_mrp_leaderboard(m_df):
     
     mrp_counts.columns = ['Player', 'Nominations']
     return mrp_counts.head(10) # Return Top 10
+
+
+def calculate_final_standings(m_df, division):
+    """
+    Determines final tournament placement from completed bracket/playoff matches.
+    Detects placement based on stage name keywords (e.g. 'Final', '3rd', '5th').
+    """
+    div_matches = m_df[m_df['division'] == division]
+    completed = div_matches[div_matches['status'] == 'completed']
+
+    placements = {}
+
+    # (keywords, winner_position, loser_position)
+    placement_patterns = [
+        (["final", "1st", "gold", "championship"], 1, 2),
+        (["3rd", "bronze", "3/4"], 3, 4),
+        (["5th", "5/6"], 5, 6),
+        (["7th", "7/8"], 7, 8),
+        (["9th", "9/10"], 9, 10),
+        (["11th", "11/12"], 11, 12),
+        (["13th", "13/14"], 13, 14),
+    ]
+
+    for _, row in completed.iterrows():
+        stage_lower = str(row.get('stage', '')).lower()
+        # Skip pool stages
+        if 'pool' in stage_lower or ' rr' in stage_lower:
+            continue
+        score_a = row.get('score_a')
+        score_b = row.get('score_b')
+        if pd.isna(score_a) or pd.isna(score_b):
+            continue
+
+        for keywords, winner_pos, loser_pos in placement_patterns:
+            if any(kw in stage_lower for kw in keywords):
+                team_a = str(row['team_a']).strip()
+                team_b = str(row['team_b']).strip()
+                if score_a > score_b:
+                    placements[team_a] = winner_pos
+                    placements[team_b] = loser_pos
+                elif score_b > score_a:
+                    placements[team_b] = winner_pos
+                    placements[team_a] = loser_pos
+                break
+
+    if not placements:
+        return pd.DataFrame(columns=['Position', 'Team'])
+
+    result = pd.DataFrame([
+        {'Position': pos, 'Team': team}
+        for team, pos in placements.items()
+    ]).sort_values('Position').reset_index(drop=True)
+    result.index = result.index + 1
+    return result
 
 
 # --- 5. PHASE: RATINGS ---
@@ -576,6 +632,24 @@ def show_main_interface(is_live):
             st.markdown("### Women's Division")
             women_rr = m_df[(m_df['division'] == 'Women') & (m_df['stage'] == 'Women RR')]
             st.table(calculate_standings(women_rr, pool_name="Women"))
+
+            st.markdown("---")
+            st.markdown("## 🏆 Final Standings")
+            fs_col_open, fs_col_women = st.columns(2)
+            with fs_col_open:
+                st.markdown("### Open Division")
+                open_final = calculate_final_standings(m_df, "Open")
+                if open_final.empty:
+                    st.caption("Playoff results not yet available.")
+                else:
+                    st.table(open_final)
+            with fs_col_women:
+                st.markdown("### Women's Division")
+                women_final = calculate_final_standings(m_df, "Women")
+                if women_final.empty:
+                    st.caption("Playoff results not yet available.")
+                else:
+                    st.table(women_final)
 
         with matches_tab:
             st.subheader("Recent Results")
