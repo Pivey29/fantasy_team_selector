@@ -245,15 +245,34 @@ def get_mrp_leaderboard(m_df):
 
 def calculate_final_standings(m_df, division):
     """
-    Determines final tournament placement from completed bracket/playoff matches.
-    Detects placement based on stage name keywords (e.g. 'Final', '3rd', '5th').
+    Determines final tournament placement.
+    - Bracket teams: ranked by playoff match outcomes (keyword-based stage detection).
+    - Non-bracket teams: ranked by combined pool record (W > PD > PS), assigned
+      positions immediately after the last bracket position.
     """
     div_matches = m_df[m_df['division'] == division]
     completed = div_matches[div_matches['status'] == 'completed']
 
-    placements = {}
+    def is_pool_stage(stage):
+        s = str(stage).lower()
+        return 'pool' in s or s.strip().endswith('rr') or ' rr' in s
 
-    # (keywords, winner_position, loser_position)
+    pool_matches = completed[completed['stage'].apply(is_pool_stage)]
+    bracket_matches = completed[~completed['stage'].apply(is_pool_stage)]
+
+    # All teams that appear in any division match
+    all_teams = set()
+    for _, row in div_matches.iterrows():
+        all_teams.add(str(row['team_a']).strip())
+        all_teams.add(str(row['team_b']).strip())
+
+    # Teams that appear in at least one bracket match
+    bracket_teams = set()
+    for _, row in bracket_matches.iterrows():
+        bracket_teams.add(str(row['team_a']).strip())
+        bracket_teams.add(str(row['team_b']).strip())
+
+    # Placement patterns: (keywords in stage name, winner_pos, loser_pos)
     placement_patterns = [
         (["final", "1st", "gold", "championship"], 1, 2),
         (["3rd", "bronze", "3/4"], 3, 4),
@@ -264,16 +283,13 @@ def calculate_final_standings(m_df, division):
         (["13th", "13/14"], 13, 14),
     ]
 
-    for _, row in completed.iterrows():
+    placements = {}
+    for _, row in bracket_matches.iterrows():
         stage_lower = str(row.get('stage', '')).lower()
-        # Skip pool stages
-        if 'pool' in stage_lower or ' rr' in stage_lower:
-            continue
         score_a = row.get('score_a')
         score_b = row.get('score_b')
         if pd.isna(score_a) or pd.isna(score_b):
             continue
-
         for keywords, winner_pos, loser_pos in placement_patterns:
             if any(kw in stage_lower for kw in keywords):
                 team_a = str(row['team_a']).strip()
@@ -285,6 +301,34 @@ def calculate_final_standings(m_df, division):
                     placements[team_b] = winner_pos
                     placements[team_a] = loser_pos
                 break
+
+    # Teams not in any bracket match → rank by pool record
+    bottom_teams = all_teams - bracket_teams
+    if bottom_teams:
+        next_pos = (max(placements.values()) + 1) if placements else 1
+        stats = {team: {'W': 0, 'PD': 0, 'PS': 0} for team in bottom_teams}
+        for _, row in pool_matches.iterrows():
+            score_a = row.get('score_a')
+            score_b = row.get('score_b')
+            if pd.isna(score_a) or pd.isna(score_b):
+                continue
+            for side in ['a', 'b']:
+                team = str(row[f'team_{side}']).strip()
+                opp = 'b' if side == 'a' else 'a'
+                if team in stats:
+                    pts_for = int(row[f'score_{side}'])
+                    pts_against = int(row[f'score_{opp}'])
+                    stats[team]['PS'] += pts_for
+                    stats[team]['PD'] += pts_for - pts_against
+                    if pts_for > pts_against:
+                        stats[team]['W'] += 1
+
+        ranked_bottom = sorted(
+            bottom_teams,
+            key=lambda t: (-stats[t]['W'], -stats[t]['PD'], -stats[t]['PS'])
+        )
+        for i, team in enumerate(ranked_bottom):
+            placements[team] = next_pos + i
 
     if not placements:
         return pd.DataFrame(columns=['Position', 'Team'])
